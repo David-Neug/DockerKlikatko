@@ -1,0 +1,20 @@
+# Závislosti
+node_modules/
+
+# Výstup buildu
+dist/
+
+# Nastavení vytvořené při spuštění z projektu (npm start)
+/settings.json
+/settings.json.tmp
+/error-reports/
+
+# Editory
+.vs/
+.idea/
+.vscode/
+
+# Ostatní
+*.log
+*.bak
+Thumbs.db

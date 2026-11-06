@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'">
+  <title>Živý seznam kontejnerů</title>
+  <link rel="stylesheet" href="../common/styles.css">
+</head>
+<body>
+  <div class="window">
+    <textarea id="logBox" class="log-box" readonly spellcheck="false" wrap="off">Načítám běžící kontejnery…</textarea>
+    <div class="button-bar">
+      <button id="closeButton">Zavřít</button>
+    </div>
+  </div>
+  <script src="../common/ui.js"></script>
+  <script src="live.js"></script>
+</body>
+</html>

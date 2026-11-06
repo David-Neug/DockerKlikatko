@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'">
+  <title>Logy</title>
+  <link rel="stylesheet" href="../common/styles.css">
+</head>
+<body>
+  <div class="window">
+    <textarea id="logBox" class="log-box" readonly spellcheck="false" wrap="off">Načítám logy…</textarea>
+    <div class="button-bar">
+      <button id="refreshButton">Obnovit</button>
+      <label title="Zaškrtnutím se log čte pořád dál, jak kontejner píše nové řádky. Bez zaškrtnutí je jen posledních 300 řádků. Odškrtnutím se živé čtení zastaví a text v okně zůstane."><input id="followCheckBox" type="checkbox"> Sledovat</label>
+      <button id="closeButton">Zavřít</button>
+    </div>
+  </div>
+  <script src="../common/ui.js"></script>
+  <script src="logs.js"></script>
+</body>
+</html>

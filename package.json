@@ -1,0 +1,56 @@
+{
+  "name": "docker-klikatko",
+  "productName": "DockerKlikatko",
+  "version": "1.0.0",
+  "description": "Správa kontejnerů a služeb docker-compose ve WSL nebo v Linuxu",
+  "author": "David Neugebauer",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "src/App/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "cz.soukrome.dockerklikatko",
+    "productName": "DockerKlikatko",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "extraFiles": [
+      {
+        "from": "src/Settings/settings.json",
+        "to": "settings.json"
+      }
+    ],
+    "win": {
+      "target": [
+        "zip",
+        "portable"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "tar.gz"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Development"
+    }
+  },
+  "dependencies": {
+    "iconv-lite": "^0.7.3",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  }
+}

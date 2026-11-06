@@ -1,0 +1,20 @@
+{
+  "composePath": "C:\\Projekty\\docker\\docker-compose.yml",
+  "autoRefresh": false,
+  "refreshSeconds": 10,
+  "groups": [],
+  "localBinaries": [
+    {
+      "serviceName": "dtf-test-ukazka",
+      "projectPath": "C:\\Projekty\\Ukazka\\src\\DTF.Ukazka\\DTF.Ukazka.csproj",
+      "configuration": "Debug",
+      "mainAssembly": "DTF.Ukazka.dll",
+      "defaultScope": "assembly",
+      "outputFolderExcludes": [
+        "*.config"
+      ],
+      "binPath": null,
+      "msBuildPath": "C:\\Program Files\\Microsoft Visual Studio\\18\\Professional\\MSBuild\\Current\\Bin\\MSBuild.exe"
+    }
+  ]
+}

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'">
+  <title>Správa Dockeru</title>
+  <link rel="stylesheet" href="../common/styles.css">
+  <link rel="stylesheet" href="main.css">
+</head>
+<body>
+  <div class="root">
+    <header class="panel header">
+      <div class="header-brand">
+        <img class="header-icon" src="../../../assets/icon.svg" alt="">
+        <div class="header-titles">
+          <div id="titleLabel" class="title">Docker</div>
+          <div id="subtitleLabel" class="subtitle"></div>
+        </div>
+      </div>
+      <div class="header-controls">
+        <span id="environmentStatusLabel" class="environment-status">Neznámý stav</span>
+        <button id="startWslButton" class="primary">Spustit WSL</button>
+        <button id="stopWslButton">Zastavit WSL</button>
+        <button id="refreshStatusButton">Obnovit stav</button>
+        <button id="liveListButton" title="Každou sekundu vypisuje běžící kontejnery, stejně jako bat List containers live view. Hlavní okno zůstane ovladatelné.">Živý seznam</button>
+      </div>
+    </header>
+
+    <section class="panel compose-row">
+      <label for="composePathInput" class="strong-label">Soubor docker-compose:</label>
+      <input id="composePathInput" type="text" spellcheck="false">
+      <button id="browseComposeButton">Procházet</button>
+      <button id="loadComposeButton" class="primary">Načíst služby</button>
+    </section>
+
+    <div class="split">
+      <aside id="groupsPanel" class="panel groups">
+        <div class="groups-title">Skupiny</div>
+        <div class="groups-management">
+          <button id="addGroupButton" class="primary">Přidat</button>
+          <button id="editGroupButton">Upravit</button>
+          <button id="deleteGroupButton" class="danger">Smazat</button>
+        </div>
+        <div id="groupsList" class="list" tabindex="0"></div>
+        <div class="strong-label">Akce pro vybranou skupinu</div>
+        <div class="groups-actions">
+          <button id="startGroupButton" class="primary">Spustit skupinu</button>
+          <button id="stopGroupButton">Zastavit skupinu</button>
+          <button id="pullGroupButton">Stáhnout nové image</button>
+        </div>
+      </aside>
+
+      <div id="splitter" class="splitter"></div>
+
+      <main class="panel services">
+        <div class="services-toolbar">
+          <button id="refreshServicesButton">Obnovit</button>
+          <button id="startServiceButton">Spustit</button>
+          <button id="stopServiceButton">Zastavit</button>
+          <button id="pullServiceButton" title="U služby s image nejdřív vyberete tag. Ten se stáhne a zapíše do docker-compose. Služba, která se sestavuje, se sestaví jako doteď.">Stáhnout image</button>
+          <button id="removeServiceButton" class="danger" title="Zastaví a smaže jen kontejner vybrané služby. Image, volumes a data databází zůstanou. Compose se nemění. Službu pak jde znovu spustit.">Odstranit</button>
+          <button id="showLogsButton">Zobrazit logy</button>
+          <button id="localBinariesButton" title="Sestaví zdrojový projekt služby (Rebuild) a nahraje jeho výstup do Bin běžícího DTF kontejneru. Restart kontejneru vrátí binárky z Nexusu.">Nahrát lokální binárky</button>
+          <label class="auto-refresh"><input id="autoRefreshCheckBox" type="checkbox"> Auto obnova</label>
+          <span class="muted">s:</span>
+          <input id="refreshIntervalInput" type="number" min="5" max="300" step="1">
+        </div>
+
+        <div id="gridContainer" class="grid-container" tabindex="0">
+          <table class="grid">
+            <colgroup>
+              <col><col><col><col><col><col><col><col><col><col>
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Služba</th>
+                <th>Image / verze z compose</th>
+                <th>Spuštěný image / verze</th>
+                <th>Binárky</th>
+                <th>Limit RAM</th>
+                <th>CPU</th>
+                <th>RAM využití</th>
+                <th>Porty</th>
+                <th>Stav</th>
+                <th>Health</th>
+              </tr>
+            </thead>
+            <tbody id="servicesBody"></tbody>
+          </table>
+        </div>
+
+        <div class="legend">
+          <span class="legend-item"><span class="legend-sample running"></span>Běží</span>
+          <span class="legend-item"><span class="legend-sample failing"></span>Padá</span>
+          <span class="legend-item"><span class="legend-sample stopped"></span>Zastaveno</span>
+          <span class="legend-item"><span class="legend-sample"></span>Není vytvořen</span>
+          <span class="legend-item"><span class="legend-sample mismatch"></span>Jiný image než v compose</span>
+        </div>
+
+        <div class="operation">
+          <span class="operation-label">Operace:</span>
+          <div id="operationProgress" class="progress"><div class="progress-bar"></div></div>
+          <span id="operationStatusLabel" class="operation-status">Připraveno</span>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="../common/ui.js"></script>
+  <script src="servicePresentation.js"></script>
+  <script src="groupEditor.js"></script>
+  <script src="imagePicker.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

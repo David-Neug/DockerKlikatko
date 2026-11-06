@@ -1,0 +1,232 @@
+# DockerKlikatko – správa Dockeru ve WSL i v Linuxu
+
+Desktopová aplikace (Electron) pro klikací správu služeb z jednoho souboru `docker-compose.yml`. Běží na **Windows** (Docker ve WSL) i na **Linuxu** (Docker nativně).
+
+## Co umí
+
+- **Stav prostředí** – na Windows ukazuje stav WSL a umí ho spustit (`wsl -d <výchozí distribuce> -e true`) nebo zastavit (`wsl --shutdown`). Na Linuxu jsou tlačítka WSL skrytá a místo nich je vidět, jestli odpovídá Docker daemon.
+- **Načtení compose** – zobrazí všechny služby v tabulce:
+
+  | Sloupec | Obsah |
+  |---|---|
+  | Služba | název služby v compose |
+  | Image / verze z compose | `image`, případně `sestaveno z <context>` a verze z labelů `app.version` / `mssql.version`, env `APP_VERSION` nebo build arg `MSSQL_BASE_IMAGE_TAG` |
+  | Spuštěný image / verze | image běžícího kontejneru a krátké ID. Když se liší od compose, buňka zčervená |
+  | Binárky | jen u DTF služeb (volume na `/dtf-test`): `Nexus`, `Local · větev · commit …`, `Startuje…`, `Nenastaveno` |
+  | Limit RAM | `mem_limit` |
+  | CPU, RAM využití | z `docker stats` |
+  | Porty | adresy `localhost:<port>` přes gateway (z nginx konfigurace ve složce `/stream`), jinak `ports` z compose |
+  | Stav, Health | stav kontejneru česky (Běží · 2 h, Padá · kód 137, Zastaveno …) a healthcheck |
+
+  Barva řádku: zelená = běží, oranžová = padá, šedá = zastaveno, bílá = kontejner není vytvořen.
+- **Akce nad službou** – Spustit (i služby s `replicas: 0`, spustí jednu instanci), Zastavit, Odstranit kontejner (volumes a data zůstanou), Zobrazit logy (posledních 300 řádků, volitelně živé sledování).
+- **Stáhnout image** – u služby s `image` nabídne tagy z registru (Docker Hub nebo privátní registr, přihlašovací údaje bere z `~/.docker/config.json` a credential helperu). Vybraný tag stáhne a **přepíše řádek `image:` v compose** (zachová uvozovky, komentáře, BOM i konce řádků). Služba s `build` se sestaví.
+- **Skupiny** – pojmenované sady služeb (Přidat / Upravit / Smazat). Skupinu jde najednou spustit, zastavit nebo pro ni stáhnout image. „Všechny služby“ pracuje s celým compose.
+- **Živý seznam** – samostatné okno, které každou sekundu vypisuje běžící kontejnery (image, verze, stav, čas startu).
+- **Auto obnova** – stav služeb se obnovuje každých 5–300 s.
+- **Nahrát lokální binárky** – u DTF služby s mapováním v nastavení sestaví zdrojový projekt (MSBuild Rebuild) a nahraje výstup do složky `Bin` běžícího kontejneru. Podrobnosti viz [Lokální binárky](#lokální-binárky).
+
+## Požadavky
+
+- **Docker** s Compose v2 (`docker compose`) v `PATH`.
+  - Windows: Docker Desktop nebo Docker ve WSL, plus `wsl.exe`.
+  - Linux: nativní Docker, uživatel musí smět volat `docker` (skupina `docker`).
+- Pro lokální binárky: `git` v `PATH` a MSBuild (výchozí cesta je Visual Studio 18 Professional).
+- Pro vývoj a build: **Node.js 20+** a npm.
+
+## Instalace a spuštění
+
+Hotová aplikace vzniká buildem (viz [Build](#build)) ve složce `dist/` v projektu. Nic se neinstaluje, stačí ji zkopírovat a spustit.
+
+### Windows
+
+1. Spusť `build.bat` (dvojklikem). Po dokončení jsou ve složce `dist\` tři varianty:
+
+   | Soubor / složka | Co to je |
+   |---|---|
+   | `win-unpacked\` | rozbalená aplikace, spouští se `DockerKlikatko.exe` |
+   | `DockerKlikatko-<verze>-win.zip` | stejná aplikace zabalená do zipu |
+   | `DockerKlikatko <verze>.exe` | portable verze v jednom souboru |
+
+2. Vyber si jednu variantu:
+   - **Doporučeno:** zkopíruj celou složku `win-unpacked` (nebo rozbal zip) do vlastní složky, třeba `C:\Nástroje\DockerKlikatko`, a spusť `DockerKlikatko.exe`. Na exe si můžeš udělat zástupce na plochu nebo připnout aplikaci na hlavní panel.
+   - **Portable:** zkopíruj `DockerKlikatko <verze>.exe` kamkoli a spusť ho. Startuje o něco pomaleji, protože se při každém spuštění rozbaluje do dočasné složky.
+3. Nastavení (`settings.json`) leží vždy **vedle spouštěného exe**. Při prvním spuštění se vytvoří z výchozího nastavení.
+
+> **Nespouštěj aplikaci přímo z `dist\`.** Každý další build obsah `dist\` přepíše, včetně `settings.json`, a tím zmizí tvoje skupiny i cesta ke compose.
+
+Při aktualizaci na novou verzi přepiš v cílové složce všechno kromě `settings.json`. Tak si nastavení ponecháš.
+
+### Linux
+
+1. V kořeni projektu spusť `./build.sh`. Po dokončení jsou ve složce `dist/`:
+
+   | Soubor / složka | Co to je |
+   |---|---|
+   | `docker-klikatko-<verze>.tar.gz` | aplikace zabalená do archivu |
+   | `linux-unpacked/` | rozbalená aplikace |
+   | soubor `.AppImage` | aplikace v jednom souboru (vzniká jen při buildu na Linuxu) |
+
+2. Vyber si jednu variantu:
+   - **tar.gz:** rozbal ho do vlastní složky, třeba `~/Aplikace/DockerKlikatko`, a spusť soubor `docker-klikatko`:
+     ```bash
+     mkdir -p ~/Aplikace/DockerKlikatko
+     tar -xzf dist/docker-klikatko-*.tar.gz -C ~/Aplikace/DockerKlikatko --strip-components=1
+     ~/Aplikace/DockerKlikatko/docker-klikatko
+     ```
+   - **AppImage:** zkopíruj ho kamkoli, nastav mu spouštění (`chmod +x DockerKlikatko*.AppImage`) a spusť ho.
+3. Nastavení leží vedle spouštěného souboru (u AppImage vedle souboru `.AppImage`). Když tam zapisovat nejde, použije se `~/.config/DockerKlikatko/settings.json`.
+
+Když aplikace hned po spuštění spadne s hláškou o `chrome-sandbox`, spusť ji s přepínačem `--no-sandbox`:
+
+```bash
+~/Aplikace/DockerKlikatko/docker-klikatko --no-sandbox
+```
+
+### Co ve `dist/` nepotřebuješ
+
+`builder-debug.yml` je jen ladicí výstup buildu a jde smazat.
+
+## Spuštění z projektu
+
+```bash
+npm install
+npm start
+```
+
+Při spuštění z projektu se nastavení ukládá do `settings.json` v kořeni projektu (je v `.gitignore`).
+
+## Build
+
+| Platforma | Příkaz | Výstup ve složce `dist/` |
+|---|---|---|
+| Windows | `build.bat` (nebo `npm run dist:win`) | `DockerKlikatko-<verze>-win.zip` (složka s exe) a `DockerKlikatko <verze>.exe` (portable) |
+| Linux | `./build.sh` (nebo `npm run dist:linux`) | soubor `.AppImage` a `docker-klikatko-<verze>.tar.gz` |
+
+Linuxovou verzi **sestavuj na Linuxu** přes `./build.sh`. `tar.gz` sice jde sestavit i na Windows (`npx electron-builder --linux tar.gz`), ale Windows neumí uložit unixový příznak „spustitelný“. Soubory v takovém archivu pak nejdou spustit, dokud jim ho nenastavíš ručně (viz [Řešení problémů](#řešení-problémů)). AppImage se staví jen na Linuxu.
+
+Ikona aplikace je ve složce `assets/`: `icon.ico` pro Windows, `icon.png` (512×512) pro Linux a `icon.svg` pro logo v hlavičce okna.
+
+## Nastavení
+
+Nastavení je v souboru `settings.json`:
+
+1. **Vedle spustitelného souboru** – u rozbaleného zipu vedle `DockerKlikatko.exe`, u portable exe vedle něj, u AppImage vedle souboru `.AppImage`, u `tar.gz` v rozbalené složce.
+2. Když tam zapisovat nejde, použije se uživatelská složka: `%APPDATA%\DockerKlikatko\settings.json` na Windows a `~/.config/DockerKlikatko/settings.json` na Linuxu.
+
+Když soubor neexistuje, vytvoří se z výchozího `src/Settings/settings.json`. Build tento soubor kopíruje vedle exe, takže **další build přepíše nastavení v `dist/`**. Trvalé změny dělej i v `src/Settings/settings.json`.
+
+Aplikace soubor přepisuje při každé změně (cesta ke compose, auto obnova, skupiny). Ruční úpravy proto dělej se zavřenou aplikací.
+
+```json
+{
+  "composePath": "C:\\Projekty\\docker\\docker-compose.yml",
+  "autoRefresh": false,
+  "refreshSeconds": 10,
+  "groups": [
+    { "name": "Databáze", "services": ["gateway", "mssql-ids", "mssql-emsdb"] }
+  ],
+  "localBinaries": [
+    {
+      "serviceName": "dtf-test-ukazka",
+      "projectPath": "C:\\Projekty\\Ukazka\\src\\DTF.Ukazka\\DTF.Ukazka.csproj",
+      "configuration": "Debug",
+      "mainAssembly": "DTF.Ukazka.dll",
+      "defaultScope": "assembly",
+      "outputFolderExcludes": ["*.config"],
+      "binPath": null,
+      "msBuildPath": "C:\\Program Files\\Microsoft Visual Studio\\18\\Professional\\MSBuild\\Current\\Bin\\MSBuild.exe"
+    }
+  ]
+}
+```
+
+| Klíč | Význam |
+|---|---|
+| `composePath` | cesta k `docker-compose.yml` |
+| `autoRefresh`, `refreshSeconds` | automatická obnova a její interval (5–300 s) |
+| `groups` | skupiny služeb (`name` musí být jedinečné, služby, které v compose chybí, se při akci vypíšou) |
+| `localBinaries` | mapování DTF služeb na zdrojové projekty, viz níže |
+
+## Lokální binárky
+
+Tlačítko **Nahrát lokální binárky** je vidět jen u služby, která má záznam v `localBinaries`. Povolené je, jen když kontejner běží a startovací skript už vypsal `Console starting ...` (předtím by Bin přepsal balíček z Nexusu).
+
+| Klíč | Povinný | Význam |
+|---|---|---|
+| `serviceName` | ano | název služby v compose |
+| `projectPath` | ano | cesta k `.csproj` zdrojového projektu |
+| `mainAssembly` | ano | hlavní DLL projektu (AssemblyName), např. `DTF.Ukazka.dll` |
+| `configuration` | ne | `Debug` (výchozí) |
+| `defaultScope` | ne | `assembly` = jen DLL + pdb (výchozí), `outputFolder` = celá výstupní složka buildu |
+| `outputFolderExcludes` | ne | masky souborů, které se u celé složky nekopírují (výchozí `["*.config"]`) |
+| `binPath` | ne | `null` = odvodí se z volume `…:/dtf-test` + `Bin` |
+| `msBuildPath` | ne | cesta k `MSBuild.exe` |
+
+Cestu k projektu nemusíš psát do `settings.json` ručně. Když `projectPath` po otevření okna neexistuje, aplikace nabídne vybrat soubor `.csproj` v průzkumníku. Vybraná cesta se rovnou uloží do `settings.json`. Projekt jde kdykoli změnit i tlačítkem **Změnit projekt…**.
+
+Postup po stisku **Sestavit a nahrát**:
+
+1. Zjistí větev, commit a necommitnuté změny (`git`).
+2. Zjistí výstupní cestu projektu a spustí `MSBuild -t:Rebuild`. Výstup buildu se vypisuje do okna.
+3. Ověří, že hlavní DLL je čerstvá a že se kontejner mezitím nerestartoval. Jinak nic nekopíruje.
+4. U celé složky se před kopírováním zeptá (počet přepsaných a nových souborů, upozornění na framework DLL).
+5. Zkopíruje soubory do `Bin` a zapíše značku `.local-binaries.json`. Podle ní pak sloupec Binárky ukazuje `Local · větev · commit`.
+
+Restart kontejneru vrátí binárky z Nexusu.
+
+## Záznamy o chybách
+
+Když aplikace spadne nebo zobrazí chybu, zapíše o tom záznam do složky **`error-reports`**, která leží vedle `settings.json` (tedy vedle spouštěného exe, případně v uživatelské složce).
+
+- Záznamy jsou v souborech po dnech: `error-report-RRRR-MM-DD.log`.
+- Každá další chyba se **připíše na konec** souboru, starší záznamy se nikdy nepřepíšou. Každý záznam má vlastní ID a čas.
+- Zapisuje se:
+  - chyba zobrazená v okně „Operace selhala“ (i v okně lokálních binárek),
+  - chyba při načítání nebo sledování logu,
+  - neočekávaná chyba skriptu v okně i v hlavním procesu (ta se navíc ukáže v dialogu s cestou k záznamu),
+  - pád okna nebo jiného procesu aplikace.
+- Záznam obsahuje vše potřebné k zopakování chyby:
+
+  | Část | Obsah |
+  |---|---|
+  | Zpráva, Stack | text chyby a místo v kódu |
+  | Kontext | rozpracovaná operace a její poslední řádky, cesta ke compose, vybraná skupina a služba, stav kontejneru. U lokálních binárek mapování, cílová složka Bin, rozsah, git a konec výpisu buildu |
+  | Prostředí | verze aplikace, Electronu a OS, cesta k exe a k nastavení |
+  | Nastavení | aktuální obsah `settings.json` |
+  | Poslední volání | až 40 posledních akcí (Docker, WSL, compose, git, MSBuild…) s argumenty, dobou trvání a výsledkem, u chyb i se stackem |
+
+Při nahlášení chyby stačí poslat příslušný záznam ze souboru.
+
+## Řešení problémů
+
+- **Načtení stavu trvá dlouho** – `docker compose ps` u compose na síťovém nebo mapovaném disku trvá i desítky sekund, první volání `docker` po pauze také. Je to rychlost Docker CLI, aplikace na výsledek jen čeká.
+- **Registr vyžaduje přihlášení** – v `~/.docker/config.json` na straně, kde aplikace běží, chybí údaje k registru. Na Windows s Dockerem jen ve WSL tento soubor často neexistuje.
+- **„Program docker není v PATH.“** – aplikace nenašla příkaz `docker`. Ověř v terminálu `which docker` a `docker info`. Když Docker chybí, nainstaluj ho. Když `docker info` hlásí „permission denied … docker.sock“, přidej se do skupiny docker (`sudo usermod -aG docker $USER`) a znovu se přihlas. Aplikace přebírá `PATH` z prostředí, ze kterého ji spouštíš.
+- **Na Linuxu zůstala windowsová cesta ke compose** (`C:\...`) – je to výchozí hodnota z nastavení. Vyber svůj `docker-compose.yml` tlačítkem **Procházet**.
+- **Varování v terminálu o `vaapi`, `MESA-LOADER` nebo `GLib-GObject`** – jde jen o grafickou akceleraci (typicky ve virtuálce) a fungování aplikace neovlivňují. Kdyby se okno špatně vykreslovalo, spusť ho s `--disable-gpu`.
+- **Na Linuxu hlásí `./docker-klikatko: Permission denied`** – archiv byl sestavený na Windows a soubory nemají příznak spustitelnosti. V rozbalené složce ho nastav:
+  ```bash
+  chmod +x docker-klikatko chrome_crashpad_handler chrome-sandbox
+  ```
+  Pro příště sestav linuxovou verzi na Linuxu přes `./build.sh`.
+- **Na Linuxu se aplikace nespustí kvůli sandboxu** (hláška o `chrome-sandbox`) – spusť ji s přepínačem `--no-sandbox`, nebo jednou nastav sandbox (`sudo chown root:root chrome-sandbox && sudo chmod 4755 chrome-sandbox`) a pak spouštěj normálně.
+- **`npm start` spustí Node místo okna** – v prostředí je nastavená proměnná `ELECTRON_RUN_AS_NODE`. Před spuštěním ji zruš.
+
+## Struktura projektu
+
+```
+build.bat, build.ps1   build pro Windows
+build.sh               build pro Linux
+assets/                ikony aplikace
+src/
+  App/                 hlavní proces Electronu: okna, IPC, preload
+  Process/             spouštění externích programů (výstup po řádcích, timeouty, ukončení stromu procesů)
+  Wsl/                 stav, spuštění a zastavení WSL
+  Docker/              docker / docker compose, živý seznam kontejnerů
+  Compose/             čtení docker-compose a přepis řádku image
+  Images/              rozbor názvu image, tagy z registrů, přihlašovací údaje Dockeru
+  LocalBinaries/       git, MSBuild, kopírování do Bin a značka nasazení
+  Settings/            výchozí settings.json, načítání a ukládání nastavení
+  Ui/                  okna aplikace (hlavní okno, logy, živý seznam, lokální binárky)
+```

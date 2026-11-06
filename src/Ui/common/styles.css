@@ -1,0 +1,189 @@
+:root {
+  --page-back: #f5f7fa;
+  --panel-back: #ffffff;
+  --text-strong: #1f2937;
+  --text: #374151;
+  --text-muted: #4b5563;
+  --text-soft: #6b7280;
+  --primary: #2563eb;
+  --danger: #b91c1c;
+  --success: #16a34a;
+  --disabled-back: #e5e7eb;
+  --disabled-border: #d1d5db;
+  --border: #d1d5db;
+  --grid-header: #f9fafb;
+  --grid-selection: #dbeafe;
+  --log-back: #1f2937;
+  --log-text: #e5e7eb;
+  --running-back: #dcfce7;
+  --failing-back: #ffedd5;
+  --stopped-back: #f3f4f6;
+  --mismatch-back: #fee2e2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--page-back);
+  color: var(--text);
+  font-family: "Segoe UI", "Noto Sans", "DejaVu Sans", "Ubuntu", sans-serif;
+  font-size: 12px;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--text);
+  border-radius: 0;
+  background: var(--panel-back);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+button.primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #ffffff;
+}
+
+button.primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+button.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+button:disabled {
+  border-color: var(--disabled-border);
+  background: var(--disabled-back);
+  color: #9ca3af;
+  cursor: default;
+}
+
+input[type="text"],
+input[type="number"] {
+  font: inherit;
+  height: 26px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  color: var(--text-strong);
+  background: #ffffff;
+}
+
+input:focus,
+button:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: -1px;
+}
+
+label {
+  user-select: none;
+}
+
+.log-box {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  margin: 0;
+  padding: 6px 8px;
+  border: none;
+  resize: none;
+  background: var(--log-back);
+  color: var(--log-text);
+  font-family: Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+  font-size: 12px;
+  white-space: pre;
+  overflow: auto;
+  outline: none;
+}
+
+.button-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--panel-back);
+}
+
+.button-bar.end {
+  justify-content: flex-end;
+}
+
+.window {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(17, 24, 39, 0.35);
+  z-index: 10;
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  background: var(--panel-back);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.modal-title {
+  padding: 10px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  color: var(--text-strong);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.modal-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 16px;
+}
+
+.error-dialog {
+  width: 760px;
+}
+
+.error-summary {
+  color: var(--danger);
+  font-weight: 600;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.error-details {
+  flex: 0 1 auto;
+  height: 50vh;
+  margin-top: 10px;
+}
+
+.modal .button-bar {
+  padding: 8px 16px 12px;
+}

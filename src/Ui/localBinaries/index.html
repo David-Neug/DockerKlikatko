@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'">
+  <title>Nahrát lokální binárky</title>
+  <link rel="stylesheet" href="../common/styles.css">
+  <link rel="stylesheet" href="localBinaries.css">
+</head>
+<body>
+  <div class="window">
+    <div class="top">
+      <div id="infoLabel" class="info"></div>
+      <div id="gitLabel" class="info">Git: zjišťuji…</div>
+      <div class="scope">
+        <label><input id="assemblyRadio" type="radio" name="scope" value="assembly"> <span id="assemblyText"></span></label>
+        <label><input id="folderRadio" type="radio" name="scope" value="outputFolder"> <span id="folderText"></span></label>
+      </div>
+    </div>
+    <textarea id="logBox" class="log-box" readonly spellcheck="false" wrap="off"></textarea>
+    <div class="button-bar">
+      <button id="deployButton" class="primary" disabled>Sestavit a nahrát</button>
+      <button id="chooseProjectButton" title="Otevře průzkumník pro výběr souboru .csproj. Vybraná cesta se uloží do settings.json.">Změnit projekt…</button>
+      <button id="closeButton">Zavřít</button>
+    </div>
+  </div>
+  <script src="../common/ui.js"></script>
+  <script src="localBinaries.js"></script>
+</body>
+</html>
