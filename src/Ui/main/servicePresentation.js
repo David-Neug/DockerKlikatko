@@ -276,6 +276,63 @@ const ServicePresentation = (() => {
     return lines.join("\n");
   }
 
+  const SPACE_REASONS = {
+    imageOldVersion: "stará verze image",
+    imageCompose: "image z compose, kontejner neexistuje",
+    imageOtherTag: "jiný tag image než v compose",
+    imageUnused: "nepoužívaný image",
+    containerStopped: "zastavený kontejner",
+    volumeOrphanAnonymous: "osiřelý anonymní volume",
+    volumeComposeNamed: "pojmenovaný volume s daty",
+    volumeNamed: "pojmenovaný volume s daty"
+  };
+  const SPACE_TOOLTIP_ITEMS = 8;
+
+  function spaceText(space) {
+    if (!space)
+      return "—";
+    if (space.safeBytes > 0)
+      return `Ano · ${Ui.formatSize(space.safeBytes)}`;
+    return space.requestBytes > 0 ? "Na vyžádání" : "Ne";
+  }
+
+  function spaceItemLines(items) {
+    const lines = items.slice(0, SPACE_TOOLTIP_ITEMS).map(item => {
+      const parts = [SPACE_REASONS[item.reason] ?? item.reason];
+      if (!isBlank(item.version))
+        parts.push("verze " + item.version);
+      if (item.createdAt !== null)
+        parts.push(Ui.formatShortDateTime(item.createdAt));
+      parts.push(Ui.formatSize(item.bytes));
+      return "  • " + parts.join(" · ");
+    });
+    if (items.length > SPACE_TOOLTIP_ITEMS)
+      lines.push(`  … a dalších ${items.length - SPACE_TOOLTIP_ITEMS}`);
+    return lines;
+  }
+
+  function spaceTooltip(space, error) {
+    if (!space)
+      return error ? "Místo nejde zjistit: " + error : "Místo se ještě zjišťuje.";
+
+    const lines = [];
+    if (space.safe.length > 0) {
+      lines.push(`Bezpečně lze uvolnit nejméně ${Ui.formatSize(space.safeBytes)} (${space.safe.length}×). Nepoužívá to žádný kontejner:`);
+      lines.push(...spaceItemLines(space.safe));
+    } else {
+      lines.push("Nic, co by šlo bezpečně smazat.");
+    }
+    if (space.request.length > 0) {
+      lines.push("", `Na výslovnou žádost ${Ui.formatSize(space.requestBytes)} (${space.request.length}×). Běh to neovlivní, ale může být potřeba znovu stáhnout image nebo vytvořit kontejner:`);
+      lines.push(...spaceItemLines(space.request));
+    }
+    lines.push(
+      "",
+      `Služba teď zabírá: image ${Ui.formatSize(space.imageBytes)}, kontejner ${Ui.formatSize(space.containerBytes)}, volumy ${space.volumeCount}× ${Ui.formatSize(space.volumeBytes)}.`,
+      "Podrobnosti a mazání: tlačítko Místo na disku.");
+    return lines.join("\n");
+  }
+
   return {
     RUNNING_BACK,
     FAILING_BACK,
@@ -287,6 +344,8 @@ const ServicePresentation = (() => {
     runningImageText,
     imageDiffers,
     binariesText,
-    binariesTooltip
+    binariesTooltip,
+    spaceText,
+    spaceTooltip
   };
 })();

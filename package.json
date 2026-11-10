@@ -18,6 +18,7 @@
     "directories": {
       "output": "dist"
     },
+    "afterPack": "scripts/afterPack.js",
     "files": [
       "src/**/*",
       "assets/**/*",

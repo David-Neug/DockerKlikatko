@@ -17,6 +17,7 @@ Desktopová aplikace (Electron) pro klikací správu služeb z jednoho souboru `
   | CPU, RAM využití | z `docker stats` |
   | Porty | adresy `localhost:<port>` přes gateway (z nginx konfigurace ve složce `/stream`), jinak `ports` z compose |
   | Stav, Health | stav kontejneru česky (Běží · 2 h, Padá · kód 137, Zastaveno …) a healthcheck |
+  | Lze uvolnit | jestli u služby leží nepoužívané místo: `Ano · 58,4 GB` (staré verze image, jde bezpečně smazat), `Na vyžádání` nebo `Ne`. Tooltip vypíše konkrétní verze s datem a velikostí |
 
   Barva řádku: zelená = běží, oranžová = padá, šedá = zastaveno, bílá = kontejner není vytvořen.
 - **Akce nad službou** – Spustit (i služby s `replicas: 0`, spustí jednu instanci), Zastavit, Odstranit kontejner (volumes a data zůstanou), Zobrazit logy (posledních 300 řádků, volitelně živé sledování).
@@ -24,11 +25,12 @@ Desktopová aplikace (Electron) pro klikací správu služeb z jednoho souboru `
 - **Skupiny** – pojmenované sady služeb (Přidat / Upravit / Smazat). Skupinu jde najednou spustit, zastavit nebo pro ni stáhnout image. „Všechny služby“ pracuje s celým compose.
 - **Živý seznam** – samostatné okno, které každou sekundu vypisuje běžící kontejnery (image, verze, stav, čas startu).
 - **Auto obnova** – stav služeb se obnovuje každých 5–300 s.
+- **Místo na disku** – okno s přehledem, kolik místa zabírají image, kontejnery, volumy a build cache, co z toho jde smazat a kde data Dockeru leží. Vybrané položky smaže bez vlivu na běžící kontejnery. Podrobnosti viz [Místo na disku](#místo-na-disku).
 - **Nahrát lokální binárky** – u DTF služby s mapováním v nastavení sestaví zdrojový projekt (MSBuild Rebuild) a nahraje výstup do složky `Bin` běžícího kontejneru. Podrobnosti viz [Lokální binárky](#lokální-binárky).
 
 ## Požadavky
 
-- **Docker** s Compose v2 (`docker compose`) v `PATH`.
+- **Docker** s Compose v2 (`docker compose`) v `PATH`. Okno Místo na disku potřebuje Docker 23 nebo novější (`docker system df --format json`).
   - Windows: Docker Desktop nebo Docker ve WSL, plus `wsl.exe`.
   - Linux: nativní Docker, uživatel musí smět volat `docker` (skupina `docker`).
 - Pro lokální binárky: `git` v `PATH` a MSBuild (výchozí cesta je Visual Studio 18 Professional).
@@ -107,6 +109,8 @@ Linuxovou verzi **sestavuj na Linuxu** přes `./build.sh`. `tar.gz` sice jde ses
 
 Ikona aplikace je ve složce `assets/`: `icon.ico` pro Windows, `icon.png` (512×512) pro Linux a `icon.svg` pro logo v hlavičce okna.
 
+Čas sestavení zapíše při každém buildu skript `scripts/afterPack.js` do souboru `resources/build-info.json` vedle aplikace. Hlavní okno ho ukazuje vpravo dole („Sestaveno 10.11.2026 10:30“), takže je vidět, jak stará verze běží. Při spuštění z projektu (`npm start`) tam je „Spuštěno z projektu (bez buildu)“.
+
 ## Nastavení
 
 Nastavení je v souboru `settings.json`:
@@ -175,6 +179,43 @@ Postup po stisku **Sestavit a nahrát**:
 
 Restart kontejneru vrátí binárky z Nexusu.
 
+## Místo na disku
+
+Docker staré verze sám nemaže. Po každém novém stažení nebo sestavení image na stejný tag zůstane předchozí verze jako `<none>`. Po odstranění kontejneru zůstanou jeho anonymní volumy a build si drží cache. Tlačítko **Místo na disku** v hlavičce otevře okno, kde jde tohle místo najít a uvolnit.
+
+- **Souhrn** – počet, kolik se používá, kolik zabírá a kolik jde uvolnit, zvlášť pro image, kontejnery, volumy a build cache (z `docker system df`).
+- **Kde data leží** – složka Dockeru (`/var/lib/docker`). Na Windows i WSL distribuce, cesta k jejímu virtuálnímu disku `ext4.vhdx`, jeho velikost a volné místo na disku Windows.
+- **Podle služeb** – kolik každá služba compose zabírá (image, kontejner, volumy) a kolik u ní jde uvolnit. Dvojklik zobrazí její položky.
+- **Image / Kontejnery / Volumy / Build cache** – tabulka položek s verzí, službou, datem, velikostí a tím, kolik smazání uvolní. Po kliknutí na řádek se dole vypíše, co položka je, kde leží a co se stane po smazání.
+
+Položky jsou rozdělené podle toho, co jejich smazání způsobí:
+
+| Kategorie | Co sem patří | Co se stane po smazání |
+|---|---|---|
+| Bezpečné (zelená) | staré verze image `<none>` bez kontejneru, nepoužívaná build cache, osiřelé anonymní volumy (jejich kontejner už neexistuje a compose je znovu nepoužije) | nic, co běží nebo je v compose, se nezmění. Další build bude pomalejší, ve starých volumech můžou být stará data |
+| Na vyžádání (žlutá) | image s tagem bez kontejneru, zastavené kontejnery | image se při dalším použití znovu stáhne nebo sestaví, službu jde dál spustit a vytvoří se nový kontejner |
+| Na vyžádání · data (červená) | pojmenované volumy bez kontejneru | **smažou se jejich data**, před smazáním je druhé potvrzení |
+| Používá se (šedá) | cokoli, co používá nějaký kontejner (i zastavený) | nejde vybrat |
+
+**Vybrat vše bezpečné** vybere bezpečné položky ve všech záložkách, při filtru služby jen u ní. Před smazáním se zobrazí souhrn podle druhu položek s tím, kolik se uvolní a co se ztratí. Maže se bez `--force` (`docker rm`, `docker image rm`, `docker volume rm`, `docker builder prune --all`), takže Docker odmítne cokoli, co se mezitím začalo používat. Image s více tagy se uvolní až po smazání všech tagů. Uvedená velikost je spodní odhad, protože smazáním více verzí se uvolní i vrstvy, které sdílely.
+
+Sloupec **Lze uvolnit** v hlavní tabulce bere data ze stejného zjištění. Údaje se drží 5 minut a čerstvé se načtou po Obnovit, Načíst služby, stažení image, Odstranit a po zavření okna Místo na disku.
+
+> **Windows (WSL):** smazáním se uvolní místo uvnitř virtuálního disku `ext4.vhdx` a Docker ho použije pro další image. Soubor `.vhdx` se ale sám nezmenší, Windows místo dostanou zpět až po jeho zmenšení. Na Linuxu s nativním Dockerem se místo uvolní hned.
+
+### Zmenšit virtuální disk (Windows)
+
+Tlačítko **Zmenšit virtuální disk…** v okně Místo na disku je vidět jen na Windows, když Docker běží ve WSL distribuci na tomto počítači. Po potvrzení:
+
+1. `wsl -d <distribuce> -u root fstrim -av` označí volné místo, bez toho by komprimace skoro nic neuvolnila,
+2. `wsl --shutdown` zastaví WSL, tedy **Docker a všechny kontejnery**,
+3. `diskpart` (`attach vdisk readonly`, `compact vdisk`, `detach vdisk`) zkomprimuje soubor `.vhdx`. Windows si vyžádá **oprávnění správce** (UAC). Když komprimace selže, disk se aspoň odpojí,
+4. WSL se znovu spustí. Kontejnery bez restart policy je potřeba spustit znovu (Spustit skupinu).
+
+Data uvnitř zůstanou. Okno se během zmenšování nedá zavřít. Nejdřív smaž nepotřebné položky, jinak se uvolní málo. Cestu k disku s diakritikou aplikace nezpracuje, takový disk zmenši ručně stejnými příkazy.
+
+Automatické zmenšování (sparse režim) umí WSL 2.0 a novější: `wsl --update`, `wsl --shutdown` a `wsl --manage <distribuce> --set-sparse true`. U některých verzí WSL je označený jako experimentální. Okno ukazuje nainstalovanou verzi WSL a podle ní nabídne správný postup.
+
 ## Záznamy o chybách
 
 Když aplikace spadne nebo zobrazí chybu, zapíše o tom záznam do složky **`error-reports`**, která leží vedle `settings.json` (tedy vedle spouštěného exe, případně v uživatelské složce).
@@ -223,10 +264,10 @@ src/
   App/                 hlavní proces Electronu: okna, IPC, preload
   Process/             spouštění externích programů (výstup po řádcích, timeouty, ukončení stromu procesů)
   Wsl/                 stav, spuštění a zastavení WSL
-  Docker/              docker / docker compose, živý seznam kontejnerů
+  Docker/              docker / docker compose, živý seznam kontejnerů, místo na disku
   Compose/             čtení docker-compose a přepis řádku image
   Images/              rozbor názvu image, tagy z registrů, přihlašovací údaje Dockeru
   LocalBinaries/       git, MSBuild, kopírování do Bin a značka nasazení
   Settings/            výchozí settings.json, načítání a ukládání nastavení
-  Ui/                  okna aplikace (hlavní okno, logy, živý seznam, lokální binárky)
+  Ui/                  okna aplikace (hlavní okno, logy, živý seznam, místo na disku, lokální binárky)
 ```

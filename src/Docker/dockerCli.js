@@ -99,18 +99,28 @@ function formatSince(milliseconds) {
   return new Date(Math.floor(milliseconds / 1000) * 1000).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
+function runDockerCommand(workingDirectory, args, signal, timeoutMs, onProgress) {
+  return withGate(() => run("docker", args, {
+    cwd: workingDirectory,
+    signal,
+    timeoutMs,
+    env: DOCKER_ENVIRONMENT,
+    onLine: onProgress
+  }));
+}
+
+// Výchozí název projektu compose: název složky malými písmeny bez nepovolených znaků.
+function defaultProjectName(workingDirectory) {
+  const name = path.basename(workingDirectory).toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  return name.length > 0 ? name : null;
+}
+
 function createDockerCli(composeFilePath) {
   const fullComposePath = path.resolve(composeFilePath);
   const workingDirectory = path.dirname(fullComposePath);
 
   function runDocker(args, signal, timeoutMs, onProgress) {
-    return withGate(() => run("docker", args, {
-      cwd: workingDirectory,
-      signal,
-      timeoutMs,
-      env: DOCKER_ENVIRONMENT,
-      onLine: onProgress
-    }));
+    return runDockerCommand(workingDirectory, args, signal, timeoutMs, onProgress);
   }
 
   // Docker ve WSL bere pracovní adresář a -f jako cestu uvnitř Linuxu.
@@ -253,8 +263,16 @@ function createDockerCli(composeFilePath) {
     return { success: true, error: "", byService };
   }
 
+  async function projectName(signal) {
+    const config = await compose(["config", "--format", "json"], signal, 45000);
+    const name = readJsonValues(config.stdOut).map(item => prop(item, "name")).find(item => item && item.trim().length > 0);
+    return name ? name.trim() : defaultProjectName(workingDirectory);
+  }
+
   return {
     composeFilePath: fullComposePath,
+    workingDirectory,
+    projectName,
     up,
     stop,
     pullImage,
@@ -285,4 +303,4 @@ async function getEngineStatus(signal) {
   }
 }
 
-module.exports = { createDockerCli, getEngineStatus, CONSOLE_STARTED_TEXT };
+module.exports = { createDockerCli, getEngineStatus, runDockerCommand, CONSOLE_STARTED_TEXT };

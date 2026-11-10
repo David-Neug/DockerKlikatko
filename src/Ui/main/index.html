@@ -23,6 +23,7 @@
         <button id="stopWslButton">Zastavit WSL</button>
         <button id="refreshStatusButton">Obnovit stav</button>
         <button id="liveListButton" title="Každou sekundu vypisuje běžící kontejnery, stejně jako bat List containers live view. Hlavní okno zůstane ovladatelné.">Živý seznam</button>
+        <button id="diskButton">Místo na disku</button>
       </div>
     </header>
 
@@ -69,7 +70,7 @@
         <div id="gridContainer" class="grid-container" tabindex="0">
           <table class="grid">
             <colgroup>
-              <col><col><col><col><col><col><col><col><col><col>
+              <col><col><col><col><col><col><col><col><col><col><col>
             </colgroup>
             <thead>
               <tr>
@@ -83,6 +84,7 @@
                 <th>Porty</th>
                 <th>Stav</th>
                 <th>Health</th>
+                <th title="Jestli u služby leží nepoužívané místo (hlavně staré verze image). Ano = dá se bezpečně smazat bez vlivu na běžící kontejnery. Podrobnosti v okně Místo na disku.">Lze uvolnit</th>
               </tr>
             </thead>
             <tbody id="servicesBody"></tbody>
@@ -95,6 +97,7 @@
           <span class="legend-item"><span class="legend-sample stopped"></span>Zastaveno</span>
           <span class="legend-item"><span class="legend-sample"></span>Není vytvořen</span>
           <span class="legend-item"><span class="legend-sample mismatch"></span>Jiný image než v compose</span>
+          <span id="buildInfoLabel" class="build-info"></span>
         </div>
 
         <div class="operation">

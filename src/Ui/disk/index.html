@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'">
+  <title>Místo na disku</title>
+  <link rel="stylesheet" href="../common/styles.css">
+  <link rel="stylesheet" href="disk.css">
+</head>
+<body>
+  <div class="window">
+    <section class="top">
+      <div class="summary-container">
+        <table class="grid summary">
+          <thead>
+            <tr>
+              <th>Typ</th>
+              <th title="Počet položek / kolik z nich používá nějaký kontejner (i zastavený)">Počet / používá se</th>
+              <th>Zabírá</th>
+              <th title="Kolik by Docker uvolnil smazáním všeho nepoužívaného (docker system df). U image je to víc než součet níže, protože se uvolní i sdílené vrstvy.">Docker: nepoužívané</th>
+              <th title="Položky, jejichž smazání nic neovlivní">Bezpečně uvolnit</th>
+              <th title="Položky, které běh neovlivní, ale smazáním se něco ztratí (image se musí znovu stáhnout, data ve volume…)">Na vyžádání</th>
+            </tr>
+          </thead>
+          <tbody id="summaryBody"></tbody>
+        </table>
+      </div>
+      <div id="storageInfo" class="storage">Zjišťuji, kde leží data Dockeru…</div>
+    </section>
+
+    <nav id="tabs" class="tabs"></nav>
+
+    <div class="filter">
+      <span id="itemFilters" class="item-filters">
+        <label for="serviceFilter">Služba:</label>
+        <select id="serviceFilter" title="Zobrazí jen položky vybrané služby. Platí i pro Vybrat vše bezpečné."></select>
+        <label><input id="showInUseCheckBox" type="checkbox" checked> Zobrazit i používané (nejde smazat)</label>
+      </span>
+      <span class="legend">
+        <span class="legend-item"><span class="legend-sample safe"></span>Bezpečné – nic se neztratí</span>
+        <span class="legend-item"><span class="legend-sample request"></span>Na vyžádání – běh neovlivní, ale něco se ztratí</span>
+        <span class="legend-item"><span class="legend-sample danger"></span>Na vyžádání – smažou se data</span>
+        <span class="legend-item"><span class="legend-sample in-use"></span>Používá se</span>
+      </span>
+    </div>
+
+    <div id="gridContainer" class="grid-container" tabindex="0">
+      <table class="grid items">
+        <colgroup id="itemsColumns"></colgroup>
+        <thead id="itemsHead"></thead>
+        <tbody id="itemsBody"></tbody>
+      </table>
+    </div>
+
+    <div id="detailBox" class="detail">Klikněte na řádek a zobrazí se, co položka je, kde leží a co se stane po smazání.</div>
+
+    <div class="button-bar">
+      <span id="statusLabel" class="status">Načítám…</span>
+      <button id="selectSafeButton" title="Vybere všechny bezpečné položky ve všech záložkách. Když je vybraná služba, jen u ní.">Vybrat vše bezpečné</button>
+      <button id="clearSelectionButton">Zrušit výběr</button>
+      <button id="removeButton" class="danger">Smazat vybrané</button>
+      <button id="compactButton" hidden title="Zmenší soubor virtuálního disku WSL (.vhdx), aby Windows dostaly uvolněné místo zpět. Zastaví na pár minut WSL a všechny kontejnery, vyžádá si oprávnění správce.">Zmenšit virtuální disk…</button>
+      <button id="refreshButton">Obnovit</button>
+      <button id="closeButton">Zavřít</button>
+    </div>
+  </div>
+  <script src="../common/ui.js"></script>
+  <script src="diskPresentation.js"></script>
+  <script src="disk.js"></script>
+</body>
+</html>

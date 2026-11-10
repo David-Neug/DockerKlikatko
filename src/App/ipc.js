@@ -2,12 +2,15 @@
 
 const fs = require("fs");
 const path = require("path");
-const { ipcMain, dialog, BrowserWindow } = require("electron");
+const { app, ipcMain, dialog, BrowserWindow } = require("electron");
+const { readBuildInfo } = require("./buildInfo");
 const { createChildWindow } = require("./windows");
 const { isCanceled } = require("../Process/errors");
 const wslCli = require("../Wsl/wslCli");
+const vhdCompactor = require("../Wsl/vhdCompactor");
 const { createDockerCli, getEngineStatus } = require("../Docker/dockerCli");
 const containerLiveQuery = require("../Docker/containerLiveQuery");
+const diskUsage = require("../Docker/diskUsage");
 const composeFileReader = require("../Compose/composeFileReader");
 const composeImageEditor = require("../Compose/composeImageEditor");
 const imageReference = require("../Images/imageReference");
@@ -17,11 +20,13 @@ const localBinariesDeployer = require("../LocalBinaries/localBinariesDeployer");
 const { applyLocalBinaries } = require("../LocalBinaries/localBinariesStatus");
 
 const LINE_FLUSH_MS = 60;
+const DISK_CACHE_MS = 5 * 60000;
 
 const windowControllers = new Map();
 const childContexts = new Map();
 const logFollowers = new Map();
 const runningDeploys = new Set();
+const runningCompactions = new Set();
 let liveWindow = null;
 let errorReporter = null;
 
@@ -56,6 +61,7 @@ function releaseWindow(id) {
   windowControllers.delete(id);
   childContexts.delete(id);
   runningDeploys.delete(id);
+  runningCompactions.delete(id);
   logFollowers.get(id)?.stop();
   logFollowers.delete(id);
 }
@@ -105,6 +111,9 @@ function registerWindowHandlers() {
 
   handle("window:openLocalBinaries", (event, context) =>
     openModal(event, "localBinaries", context, { width: 1000, height: 700, minWidth: 700, minHeight: 480 }, guardLocalBinariesClose));
+
+  handle("window:openDisk", (event, composeFile, services) =>
+    openModal(event, "disk", { composeFile, services }, { width: 1280, height: 860, minWidth: 960, minHeight: 600 }, guardDiskClose));
 
   handle("window:openLive", event => {
     if (liveWindow && !liveWindow.isDestroyed()) {
@@ -159,6 +168,7 @@ function registerDialogHandlers() {
 }
 
 function registerSettingsHandlers(settingsStore) {
+  handle("app:buildInfo", () => readBuildInfo(app));
   handle("settings:load", () => ({
     settings: settingsStore.load(),
     settingsPath: settingsStore.settingsPath,
@@ -256,6 +266,52 @@ function registerLogsHandlers() {
     logFollowers.get(event.sender.id)?.stop();
     logFollowers.delete(event.sender.id);
     return null;
+  });
+}
+
+// Okno místa smí smazat jen položky z posledního načtení, které nepoužívá žádný kontejner.
+function registerDiskHandlers() {
+  handle("disk:services", (event, composePath, services, fresh) =>
+    diskUsage.serviceSpace(composePath, services, fresh ? 0 : DISK_CACHE_MS, signalOf(event)));
+
+  handle("disk:load", async event => {
+    const context = childContexts.get(event.sender.id);
+    const model = await diskUsage.load(context.composeFile, context.services, signalOf(event));
+    context.items = new Map((model.items ?? []).map(item => [item.key, item]));
+    return model;
+  });
+
+  handle("disk:storage", event => diskUsage.storage(childContexts.get(event.sender.id).composeFile, signalOf(event)));
+
+  // Cesta k disku se zjistí znovu tady, nepřebírá se z okna.
+  handle("disk:compactVhd", async event => {
+    const id = event.sender.id;
+    const storage = await diskUsage.storage(childContexts.get(id).composeFile, signalOf(event));
+    if (!storage.local || !storage.wsl?.vhdxPath)
+      throw new Error("Virtuální disk WSL s Dockerem se nepodařilo najít.");
+
+    const sendLines = createBatchedLineSender(event.sender, "disk:lines");
+    runningCompactions.add(id);
+    try {
+      return await vhdCompactor.compact(storage.wsl.vhdxPath, storage.wsl.distro, signalOf(event), sendLines);
+    } finally {
+      sendLines.flush();
+      runningCompactions.delete(id);
+      diskUsage.invalidate();
+    }
+  });
+
+  handle("disk:remove", async (event, keys) => {
+    const context = childContexts.get(event.sender.id);
+    const items = keys
+      .map(key => context.items?.get(key))
+      .filter(item => item && item.level !== diskUsage.IN_USE);
+    const sendLines = createBatchedLineSender(event.sender, "disk:lines");
+    try {
+      return await diskUsage.remove(context.composeFile, items, signalOf(event), sendLines);
+    } finally {
+      sendLines.flush();
+    }
   });
 }
 
@@ -365,6 +421,20 @@ function guardLocalBinariesClose(window) {
   });
 }
 
+function guardDiskClose(window) {
+  window.on("close", event => {
+    if (!runningCompactions.has(window.webContents.id))
+      return;
+    event.preventDefault();
+    dialog.showMessageBox(window, {
+      type: "info",
+      title: "Zmenšit virtuální disk",
+      message: "Zmenšování virtuálního disku ještě běží. Počkejte na dokončení, jinak by WSL zůstalo zastavené.",
+      buttons: ["OK"]
+    });
+  });
+}
+
 function registerIpc(settingsStore, reporter) {
   errorReporter = reporter;
   handle("error:report", (event, details) => reporter.report({ ...details, window: windowOf(event)?.getTitle() ?? details.window }));
@@ -376,6 +446,7 @@ function registerIpc(settingsStore, reporter) {
   registerDockerHandlers();
   registerImageHandlers();
   registerLogsHandlers();
+  registerDiskHandlers();
   registerLocalBinariesHandlers(settingsStore);
 }
 

@@ -12,6 +12,7 @@
     stopWslButton: Ui.byId("stopWslButton"),
     refreshStatusButton: Ui.byId("refreshStatusButton"),
     liveListButton: Ui.byId("liveListButton"),
+    diskButton: Ui.byId("diskButton"),
     composePathInput: Ui.byId("composePathInput"),
     browseComposeButton: Ui.byId("browseComposeButton"),
     loadComposeButton: Ui.byId("loadComposeButton"),
@@ -36,7 +37,8 @@
     gridContainer: Ui.byId("gridContainer"),
     servicesBody: Ui.byId("servicesBody"),
     operationProgress: Ui.byId("operationProgress"),
-    operationStatusLabel: Ui.byId("operationStatusLabel")
+    operationStatusLabel: Ui.byId("operationStatusLabel"),
+    buildInfoLabel: Ui.byId("buildInfoLabel")
   };
 
   const state = {
@@ -46,6 +48,8 @@
     services: [],
     runtime: new Map(),
     runtimeKnown: false,
+    diskSpace: null,
+    diskError: null,
     busyCount: 0,
     autoRefreshRunning: false,
     selectedServiceName: null,
@@ -234,7 +238,7 @@
       state.services = loaded;
       await persist();
       bindGrid();
-      return queryRuntime();
+      return queryRuntime(true);
     });
   }
 
@@ -254,7 +258,41 @@
     bindGrid();
   }
 
-  async function queryRuntime() {
+  // Místo na disku se zjišťuje zvlášť a jeho chyba nezastaví obnovu stavu. Bez freshDisk se bere z mezipaměti.
+  async function refreshDiskSpace(target, freshDisk) {
+    try {
+      const space = await Ui.invoke("disk:services", target, state.services, freshDisk);
+      state.diskSpace = space.error ? null : space;
+      state.diskError = space.error ?? null;
+    } catch (error) {
+      if (error.canceled)
+        throw error;
+      state.diskSpace = null;
+      state.diskError = error.message;
+    }
+    applyDiskButton();
+    bindGrid();
+  }
+
+  function applyDiskButton() {
+    const lines = ["Kolik místa zabírají image, kontejnery, volumy a build cache, co z toho jde smazat a kde data Dockeru leží."];
+    if (state.diskSpace) {
+      lines.push(
+        "",
+        `Bezpečně lze uvolnit nejméně ${Ui.formatSize(state.diskSpace.safeBytes)}.`,
+        `Na výslovnou žádost dalších ${Ui.formatSize(state.diskSpace.requestBytes)}.`);
+    }
+    view.diskButton.title = lines.join("\n");
+  }
+
+  async function showDisk() {
+    const target = currentComposePath();
+    await Ui.invoke("window:openDisk", await fileExists(target) ? target : null, state.services);
+    if (state.services.length > 0)
+      await runOperation("Obnovuji služby…", "Stav obnoven", () => queryRuntime(true));
+  }
+
+  async function queryRuntime(freshDisk = false) {
     const target = currentComposePath();
     if (!await fileExists(target)) {
       clearRuntime();
@@ -279,11 +317,12 @@
     state.runtimeKnown = true;
     state.runtime = new Map(Object.entries(query.byService));
     bindGrid();
+    await refreshDiskSpace(target, freshDisk);
     return null;
   }
 
   function refreshServices() {
-    return runOperation("Obnovuji služby…", "Stav obnoven", queryRuntime);
+    return runOperation("Obnovuji služby…", "Stav obnoven", () => queryRuntime(true));
   }
 
   // Akce nad vybranou službou.
@@ -322,7 +361,7 @@
     if (service.usesBuild && !service.usesImage) {
       await runOperation(`Sestavuji ${service.name}…`, "Hotovo", async () => {
         const result = await Ui.invoke("docker:fetch", target, service);
-        return result.success ? queryRuntime() : result.errorText;
+        return result.success ? queryRuntime(true) : result.errorText;
       });
       return;
     }
@@ -365,7 +404,7 @@
       if (!result.success)
         return result.errorText;
       if (!changed)
-        return queryRuntime();
+        return queryRuntime(true);
 
       try {
         await Ui.invoke("compose:replaceImage", target, service.name, newImage);
@@ -376,7 +415,7 @@
       const reloadError = await reloadComposeServices(target);
       if (reloadError)
         return "Image je stažený a compose upravený, ale seznam se nepodařilo znovu načíst: " + reloadError;
-      return queryRuntime();
+      return queryRuntime(true);
     });
   }
 
@@ -391,7 +430,7 @@
 
     await runOperation(`Odstraňuji ${service.name}…`, "Hotovo", async () => {
       const result = await Ui.invoke("docker:remove", target, service.name);
-      return result.success ? queryRuntime() : result.errorText;
+      return result.success ? queryRuntime(true) : result.errorText;
     });
   }
 
@@ -523,7 +562,7 @@
           errors.push(service.name + ": " + Ui.lastLine(result.errorText));
       }
 
-      const runtimeError = await queryRuntime();
+      const runtimeError = await queryRuntime(true);
       return errors.length > 0 ? errors.join("\n") : runtimeError;
     });
   }
@@ -697,6 +736,14 @@
     return cell;
   }
 
+  function spaceCell(service) {
+    const space = state.diskSpace?.services.find(item => sameName(item.name, service.name)) ?? null;
+    const cell = createCell(ServicePresentation.spaceText(space), ServicePresentation.spaceTooltip(space, state.diskError));
+    if (space && space.safeBytes >= 1e9)
+      cell.classList.add("space-reclaimable");
+    return cell;
+  }
+
   function createRow(service) {
     const current = runtimeOf(service.name);
     const known = state.runtimeKnown;
@@ -722,7 +769,8 @@
       createCell(known && current?.memory ? current.memory : "—"),
       createCell(service.portsDisplay, service.portsTooltip),
       createCell(ServicePresentation.statusText(current, known), current?.status || null),
-      createCell(ServicePresentation.healthText(current, known))
+      createCell(ServicePresentation.healthText(current, known)),
+      spaceCell(service)
     ]);
 
     const back = ServicePresentation.rowBackColor(current, known);
@@ -780,6 +828,7 @@
     view.startWslButton.disabled = busy;
     view.stopWslButton.disabled = busy;
     view.refreshStatusButton.disabled = busy;
+    view.diskButton.disabled = busy;
     view.browseComposeButton.disabled = busy;
     view.loadComposeButton.disabled = busy;
     view.refreshServicesButton.disabled = busy || !hasServices;
@@ -827,6 +876,7 @@
     view.stopWslButton.addEventListener("click", stopWsl);
     view.refreshStatusButton.addEventListener("click", refreshAll);
     view.liveListButton.addEventListener("click", () => Ui.invoke("window:openLive"));
+    view.diskButton.addEventListener("click", showDisk);
     view.browseComposeButton.addEventListener("click", browseCompose);
     view.loadComposeButton.addEventListener("click", loadCompose);
     view.composePathInput.addEventListener("keydown", event => {
@@ -912,7 +962,20 @@
     view.stopWslButton.hidden = true;
   }
 
+  async function showBuildInfo() {
+    const info = await Ui.invoke("app:buildInfo");
+    if (!info.packaged) {
+      view.buildInfoLabel.textContent = "Spuštěno z projektu (bez buildu)";
+      view.buildInfoLabel.title = "Aplikace běží přes npm start přímo ze zdrojových souborů.";
+      return;
+    }
+    const built = info.builtAt === null ? "neznámo" : Ui.formatShortDateTime(info.builtAt);
+    view.buildInfoLabel.textContent = "Sestaveno " + built;
+    view.buildInfoLabel.title = `Čas sestavení této aplikace (build): ${info.builtAt === null ? "neznámo" : Ui.formatDateTime(info.builtAt)}\nVerze v package.json: ${info.version}`;
+  }
+
   async function initialize() {
+    showBuildInfo().catch(() => {});
     const loaded = await Ui.invoke("settings:load");
     state.platform = loaded.platform;
     state.settings = loaded.settings;
@@ -924,6 +987,7 @@
     view.refreshIntervalInput.value = String(state.settings.refreshSeconds);
     wireEvents();
     configureTimer();
+    applyDiskButton();
 
     bindGroups();
     await refreshEnvironment(false);

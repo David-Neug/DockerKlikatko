@@ -58,6 +58,21 @@ async function getStatus(signal) {
   }
 }
 
+// Starší WSL z Windows parametr --version nezná, verze je pak neznámá (null).
+async function getVersion(signal) {
+  try {
+    const result = await runWsl(["--version"], signal, 20000);
+    const match = /(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:\.\d+)?/.exec((result.stdOut ?? "").replace(/\0/g, ""));
+    if (!result.success || !match)
+      return null;
+    return { text: match[0], major: Number.parseInt(match.groups.major, 10) };
+  } catch (error) {
+    if (error instanceof ProcessStartError || error instanceof TimeoutError)
+      return null;
+    throw error;
+  }
+}
+
 function startDefault(distro, signal) {
   return runWsl(["-d", distro, "-e", "true"], signal, 60000);
 }
@@ -66,4 +81,4 @@ function shutdown(signal) {
   return runWsl(["--shutdown"], signal, 90000);
 }
 
-module.exports = { getStatus, startDefault, shutdown, parseList };
+module.exports = { getStatus, getVersion, startDefault, shutdown, parseList };

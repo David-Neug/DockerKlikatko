@@ -135,6 +135,21 @@ const Ui = (() => {
     return `${date.getDate()}.${date.getMonth() + 1}.${date.getFullYear()} ${date.getHours()}:${pad(date.getMinutes())}`;
   }
 
+  // Desítkové jednotky jako v Dockeru (1 GB = 1000 MB).
+  function formatSize(bytes) {
+    if (bytes === null || bytes === undefined || !Number.isFinite(bytes))
+      return "—";
+    const units = ["B", "kB", "MB", "GB", "TB"];
+    let value = bytes;
+    let unit = 0;
+    while (value >= 1000 && unit < units.length - 1) {
+      value /= 1000;
+      unit++;
+    }
+    const decimals = unit === 0 || value >= 100 ? 0 : value >= 10 ? 1 : 2;
+    return `${value.toFixed(decimals).replace(".", ",")} ${units[unit]}`;
+  }
+
   function openModal(title, className, onCancel) {
     const body = element("div", { className: "modal-body" });
     const buttonBar = element("div", { className: "button-bar end" });
@@ -177,6 +192,7 @@ const Ui = (() => {
     showInfo,
     confirm,
     formatDateTime,
-    formatShortDateTime
+    formatShortDateTime,
+    formatSize
   };
 })();
