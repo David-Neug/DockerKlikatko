@@ -10,6 +10,7 @@ const wslCli = require("../Wsl/wslCli");
 const vhdCompactor = require("../Wsl/vhdCompactor");
 const { createDockerCli, getEngineStatus } = require("../Docker/dockerCli");
 const containerLiveQuery = require("../Docker/containerLiveQuery");
+const composeProjects = require("../Docker/composeProjects");
 const diskUsage = require("../Docker/diskUsage");
 const composeFileReader = require("../Compose/composeFileReader");
 const composeImageEditor = require("../Compose/composeImageEditor");
@@ -28,6 +29,7 @@ const logFollowers = new Map();
 const runningDeploys = new Set();
 const runningCompactions = new Set();
 let liveWindow = null;
+let projectsWindow = null;
 let errorReporter = null;
 
 function handle(channel, action) {
@@ -128,6 +130,21 @@ function registerWindowHandlers() {
     return null;
   });
 
+  handle("window:openProjects", (event, composeFile, services) => {
+    if (projectsWindow && !projectsWindow.isDestroyed()) {
+      setProjectsContext(composeFile, services);
+      if (projectsWindow.isMinimized())
+        projectsWindow.restore();
+      projectsWindow.focus();
+      return null;
+    }
+
+    projectsWindow = trackWindow(createChildWindow(windowOf(event), "projects", { width: 1280, height: 640, minWidth: 900, minHeight: 400 }));
+    projectsWindow.on("closed", () => { projectsWindow = null; });
+    setProjectsContext(composeFile, services);
+    return null;
+  });
+
   handle("window:close", event => {
     windowOf(event)?.close();
     return null;
@@ -194,7 +211,7 @@ function registerComposeHandlers() {
   });
   handle("compose:read", (_, composePath) => composeFileReader.read(composePath));
   handle("compose:replaceImage", (_, composePath, serviceName, image) => {
-    composeImageEditor.replaceServiceImage(composePath, serviceName, image);
+    composeImageEditor.replaceServiceImage(composeFileReader.serviceFile(composePath, serviceName), serviceName, image);
     return null;
   });
 }
@@ -224,6 +241,7 @@ function registerDockerHandlers() {
   handle("docker:query", async (event, composePath, services, mappings) => {
     const signal = signalOf(event);
     const docker = createDockerCli(composePath);
+    setProjectsContext(composePath, services);
     const query = await docker.query(signal);
     if (query.success)
       await applyLocalBinaries(docker, services, mappings, query.byService, signal);
@@ -231,6 +249,80 @@ function registerDockerHandlers() {
   });
 
   handle("live:table", event => containerLiveQuery.formatTable(signalOf(event)));
+
+  handle("projects:conflicts", async (event, composePath, services) => {
+    const signal = signalOf(event);
+    const ownProject = await createDockerCli(composePath).projectName(signal);
+    return composeProjects.conflicts(ownProject, services, signal);
+  });
+  handle("projects:stopMany", (event, conflicts) =>
+    withProgress(event, async onProgress => {
+      for (const conflict of conflicts) {
+        const result = await composeProjects.stop(conflict.name, signalOf(event), onProgress, conflict.containers);
+        if (!result.success)
+          return result;
+      }
+      return { success: true, errorText: "" };
+    }));
+}
+
+// Okno projektů zvýrazní ty, které drží porty compose načteného v hlavním okně.
+// Název vlastního projektu se zjišťuje přes docker compose config, proto se pamatuje.
+function setProjectsContext(composeFile, services) {
+  if (!projectsWindow || projectsWindow.isDestroyed())
+    return;
+  const id = projectsWindow.webContents.id;
+  const current = childContexts.get(id);
+  if (current && current.composeFile === composeFile) {
+    current.services = services ?? [];
+    return;
+  }
+  childContexts.set(id, { composeFile: composeFile ?? null, services: services ?? [], ownProject: undefined });
+}
+
+async function ownProjectOf(context, signal) {
+  if (!context?.composeFile)
+    return null;
+  if (context.ownProject === undefined) {
+    try {
+      context.ownProject = fs.statSync(context.composeFile).isFile()
+        ? await createDockerCli(context.composeFile).projectName(signal)
+        : null;
+    } catch (error) {
+      if (isCanceled(error))
+        throw error;
+      context.ownProject = null;
+    }
+  }
+  return context.ownProject;
+}
+
+function registerProjectsHandlers() {
+  handle("projects:list", async event => {
+    const signal = signalOf(event);
+    const context = childContexts.get(event.sender.id);
+    const projects = await composeProjects.list(signal);
+    const ownProject = await ownProjectOf(context, signal);
+    const conflicts = context?.composeFile ? composeProjects.findConflicts(projects, ownProject, context.services) : [];
+    return {
+      composeFile: context?.composeFile ?? null,
+      ownProject,
+      projects: projects.map(project => ({
+        ...project,
+        own: ownProject !== null && project.name === ownProject,
+        conflictPorts: conflicts.find(conflict => conflict.name === project.name)?.ports ?? []
+      }))
+    };
+  });
+
+  handle("projects:stop", async (event, name) => {
+    const sendLines = createBatchedLineSender(event.sender, "projects:lines");
+    try {
+      return await composeProjects.stop(name, signalOf(event), sendLines);
+    } finally {
+      sendLines.flush();
+    }
+  });
 }
 
 function registerImageHandlers() {
@@ -444,6 +536,7 @@ function registerIpc(settingsStore, reporter) {
   registerEnvironmentHandlers();
   registerComposeHandlers();
   registerDockerHandlers();
+  registerProjectsHandlers();
   registerImageHandlers();
   registerLogsHandlers();
   registerDiskHandlers();

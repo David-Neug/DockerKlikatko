@@ -5,7 +5,11 @@ Desktopová aplikace (Electron) pro klikací správu služeb z jednoho souboru `
 ## Co umí
 
 - **Stav prostředí** – na Windows ukazuje stav WSL a umí ho spustit (`wsl -d <výchozí distribuce> -e true`) nebo zastavit (`wsl --shutdown`). Na Linuxu jsou tlačítka WSL skrytá a místo nich je vidět, jestli odpovídá Docker daemon.
-- **Načtení compose** – zobrazí všechny služby v tabulce:
+- **Seznam compose souborů** – pole „Soubor docker-compose“ je rozbalovací seznam, mezi uloženými soubory jde přepínat. Položka se ukazuje jako `poznámka — cesta` (bez poznámky jen cesta).
+  - **Procházet** vybraný soubor přidá do seznamu (když v něm ještě není) a zvolí ho.
+  - **Spravovat** otevře dialog se seznamem: cestu i poznámku jde přepsat přímo v řádku, **Přidat…** vybere další soubor, **Smazat** odebere vybraný, **Nahoru** / **Dolů** mění pořadí. Neexistující soubor má cestu červeně. Uložit nejde prázdný seznam ani stejný soubor dvakrát.
+  - Změna výběru služby **nenačte**. Dokud se nestiskne **Načíst služby**, tlačítko svítí oranžově a všechny akce (spuštění, zastavení, obnova, místo na disku, běžící projekty) pracují dál s dříve načteným compose, ke kterému patří služby v tabulce.
+- **Načtení compose** – zobrazí všechny služby v tabulce. Služby můžou být přímo v `services` nebo v souborech z `include:` (i vnořených). Relativní cesty v includovaném souboru platí vůči jeho složce a proměnné `${...}` se dosadí z `.env` vedle hlavního compose:
 
   | Sloupec | Obsah |
   |---|---|
@@ -15,13 +19,13 @@ Desktopová aplikace (Electron) pro klikací správu služeb z jednoho souboru `
   | Binárky | jen u DTF služeb (volume na `/dtf-test`): `Nexus`, `Local · větev · commit …`, `Startuje…`, `Nenastaveno` |
   | Limit RAM | `mem_limit` |
   | CPU, RAM využití | z `docker stats` |
-  | Porty | adresy `localhost:<port>` přes gateway (z nginx konfigurace ve složce `/stream`), jinak `ports` z compose |
+  | Porty | adresy `localhost:<port>` přes gateway (z nginx konfigurace ve složce `/stream` nebo z `haproxy.cfg` připojeného do gateway), jinak `ports` z compose |
   | Stav, Health | stav kontejneru česky (Běží · 2 h, Padá · kód 137, Zastaveno …) a healthcheck |
   | Lze uvolnit | jestli u služby leží nepoužívané místo: `Ano · 58,4 GB` (staré verze image, jde bezpečně smazat), `Na vyžádání` nebo `Ne`. Tooltip vypíše konkrétní verze s datem a velikostí |
 
   Barva řádku: zelená = běží, oranžová = padá, šedá = zastaveno, bílá = kontejner není vytvořen.
 - **Akce nad službou** – Spustit (i služby s `replicas: 0`, spustí jednu instanci), Zastavit, Odstranit kontejner (volumes a data zůstanou), Zobrazit logy (posledních 300 řádků, volitelně živé sledování).
-- **Stáhnout image** – u služby s `image` nabídne tagy z registru (Docker Hub nebo privátní registr, přihlašovací údaje bere z `~/.docker/config.json` a credential helperu). Vybraný tag stáhne a **přepíše řádek `image:` v compose** (zachová uvozovky, komentáře, BOM i konce řádků). Služba s `build` se sestaví.
+- **Stáhnout image** – u služby s `image` nabídne tagy z registru (Docker Hub nebo privátní registr, přihlašovací údaje bere z `~/.docker/config.json` a credential helperu). Vybraný tag stáhne a **přepíše řádek `image:` v compose** (u služby z `include:` v souboru, kde je definovaná) (zachová uvozovky, komentáře, BOM i konce řádků). Služba s `build` se sestaví.
 - **Skupiny** – pojmenované sady služeb (Přidat / Upravit / Smazat). Skupinu jde najednou spustit, zastavit nebo pro ni stáhnout image. „Všechny služby“ pracuje s celým compose.
 - **Živý seznam** – samostatné okno, které každou sekundu vypisuje běžící kontejnery (image, verze, stav, čas startu).
 - **Auto obnova** – stav služeb se obnovuje každých 5–300 s.
@@ -120,11 +124,15 @@ Nastavení je v souboru `settings.json`:
 
 Když soubor neexistuje, vytvoří se z výchozího `src/Settings/settings.json`. Build tento soubor kopíruje vedle exe, takže **další build přepíše nastavení v `dist/`**. Trvalé změny dělej i v `src/Settings/settings.json`.
 
-Aplikace soubor přepisuje při každé změně (cesta ke compose, auto obnova, skupiny). Ruční úpravy proto dělej se zavřenou aplikací.
+Aplikace soubor přepisuje při každé změně (vybraný compose, seznam compose souborů, auto obnova, skupiny). Ruční úpravy proto dělej se zavřenou aplikací.
 
 ```json
 {
   "composePath": "C:\\Projekty\\docker\\docker-compose.yml",
+  "composeFiles": [
+    { "path": "C:\\Projekty\\docker\\docker-compose.yml", "note": "" },
+    { "path": "C:\\Disky\\R2\\docker\\egw-tests\\docker-compose.yml", "note": "EGW testy" }
+  ],
   "autoRefresh": false,
   "refreshSeconds": 10,
   "groups": [
@@ -147,7 +155,8 @@ Aplikace soubor přepisuje při každé změně (cesta ke compose, auto obnova, 
 
 | Klíč | Význam |
 |---|---|
-| `composePath` | cesta k `docker-compose.yml` |
+| `composePath` | vybraný `docker-compose.yml`, po startu se načte |
+| `composeFiles` | soubory v rozbalovacím seznamu v uloženém pořadí: `path` a nepovinná `note`. Duplicitní cesty (bez ohledu na velikost písmen) se zahodí a `composePath`, který v seznamu chybí, se přidá na začátek, takže starší nastavení bez `composeFiles` funguje dál |
 | `autoRefresh`, `refreshSeconds` | automatická obnova a její interval (5–300 s) |
 | `groups` | skupiny služeb (`name` musí být jedinečné, služby, které v compose chybí, se při akci vypíšou) |
 | `localBinaries` | mapování DTF služeb na zdrojové projekty, viz níže |
@@ -244,7 +253,7 @@ Při nahlášení chyby stačí poslat příslušný záznam ze souboru.
 - **Načtení stavu trvá dlouho** – `docker compose ps` u compose na síťovém nebo mapovaném disku trvá i desítky sekund, první volání `docker` po pauze také. Je to rychlost Docker CLI, aplikace na výsledek jen čeká.
 - **Registr vyžaduje přihlášení** – v `~/.docker/config.json` na straně, kde aplikace běží, chybí údaje k registru. Na Windows s Dockerem jen ve WSL tento soubor často neexistuje.
 - **„Program docker není v PATH.“** – aplikace nenašla příkaz `docker`. Ověř v terminálu `which docker` a `docker info`. Když Docker chybí, nainstaluj ho. Když `docker info` hlásí „permission denied … docker.sock“, přidej se do skupiny docker (`sudo usermod -aG docker $USER`) a znovu se přihlas. Aplikace přebírá `PATH` z prostředí, ze kterého ji spouštíš.
-- **Na Linuxu zůstala windowsová cesta ke compose** (`C:\...`) – je to výchozí hodnota z nastavení. Vyber svůj `docker-compose.yml` tlačítkem **Procházet**.
+- **Na Linuxu zůstala windowsová cesta ke compose** (`C:\...`) – je to výchozí hodnota z nastavení. Vyber svůj `docker-compose.yml` tlačítkem **Procházet** a stiskni **Načíst služby**. Windowsovou cestu pak můžeš ze seznamu smazat přes **Spravovat**.
 - **Varování v terminálu o `vaapi`, `MESA-LOADER` nebo `GLib-GObject`** – jde jen o grafickou akceleraci (typicky ve virtuálce) a fungování aplikace neovlivňují. Kdyby se okno špatně vykreslovalo, spusť ho s `--disable-gpu`.
 - **Na Linuxu hlásí `./docker-klikatko: Permission denied`** – archiv byl sestavený na Windows a soubory nemají příznak spustitelnosti. V rozbalené složce ho nastav:
   ```bash

@@ -66,10 +66,79 @@
   padding: 10px 16px;
 }
 
-.compose-row input {
+.compose-row select {
   flex: 1;
   min-width: 0;
   height: 28px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--text-strong);
+  font: inherit;
+}
+
+.compose-row select:focus {
+  outline: 2px solid #93c5fd;
+  outline-offset: -1px;
+}
+
+/* Vybraný compose ještě není načtený, služby v tabulce patří k předchozímu. */
+.compose-row button.pending:not(:disabled) {
+  border-color: #d97706;
+  background: #f59e0b;
+  color: #111827;
+  font-weight: 700;
+}
+
+.compose-row button.pending:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.compose-editor {
+  width: 920px;
+  height: 520px;
+}
+
+.compose-editor .compose-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+}
+
+.compose-editor .compose-item {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 6px;
+  padding: 4px 6px;
+  border-bottom: 1px solid #e5e7eb;
+  cursor: default;
+}
+
+.compose-editor .compose-item.selected {
+  background: var(--grid-selection);
+}
+
+.compose-editor .compose-item.missing input.compose-path {
+  color: var(--danger);
+}
+
+.compose-editor .compose-item input {
+  width: 100%;
+  min-width: 0;
+}
+
+.compose-editor .compose-header {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 6px;
+  padding: 0 6px 4px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.compose-editor .button-bar.tools {
+  padding: 8px 0 0;
 }
 
 .strong-label {

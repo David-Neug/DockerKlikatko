@@ -1,0 +1,127 @@
+.compose-info {
+  padding: 8px 12px;
+  background: var(--panel-back);
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.grid-container {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--panel-back);
+  outline: none;
+}
+
+.grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.grid col:nth-child(1) { width: 22%; }
+.grid col:nth-child(2) { width: 34%; }
+.grid col:nth-child(3) { width: 12%; }
+.grid col:nth-child(4) { width: 18%; }
+.grid col:nth-child(5) { width: 14%; }
+
+.grid th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 7px 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--grid-header);
+  color: var(--text);
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.grid td {
+  padding: 5px 6px;
+  border-bottom: 1px solid #e5e7eb;
+  color: var(--text-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+.grid tr.project td {
+  font-weight: 600;
+  border-top: 1px solid var(--border);
+}
+
+.grid tr.container td {
+  color: var(--text-muted);
+}
+
+.grid tr.container td:first-child {
+  padding-left: 22px;
+}
+
+.grid tr.own td {
+  background: var(--running-back);
+}
+
+.grid tr.conflict td {
+  background: var(--mismatch-back);
+}
+
+.grid tr.conflict td.conflict-ports {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.grid tr.selected td {
+  background: var(--grid-selection) !important;
+}
+
+.empty {
+  padding: 16px 12px;
+  color: var(--text-soft);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 8px 12px 2px;
+  background: var(--panel-back);
+  color: var(--text);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-sample {
+  width: 16px;
+  height: 16px;
+  border: 1px solid #6b7280;
+}
+
+.legend-sample.own {
+  background: var(--running-back);
+}
+
+.legend-sample.conflict {
+  background: var(--mismatch-back);
+}
+
+.status {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -23,14 +23,16 @@
         <button id="stopWslButton">Zastavit WSL</button>
         <button id="refreshStatusButton">Obnovit stav</button>
         <button id="liveListButton" title="Každou sekundu vypisuje běžící kontejnery, stejně jako bat List containers live view. Hlavní okno zůstane ovladatelné.">Živý seznam</button>
+        <button id="projectsButton" title="Běžící kontejnery ze všech compose projektů (i z jiných složek) seskupené podle projektu. Zvýrazní projekty, které drží porty načteného compose, a umožní je zastavit.">Běžící projekty</button>
         <button id="diskButton">Místo na disku</button>
       </div>
     </header>
 
     <section class="panel compose-row">
-      <label for="composePathInput" class="strong-label">Soubor docker-compose:</label>
-      <input id="composePathInput" type="text" spellcheck="false">
-      <button id="browseComposeButton">Procházet</button>
+      <label for="composeSelect" class="strong-label">Soubor docker-compose:</label>
+      <select id="composeSelect"></select>
+      <button id="manageComposeButton" title="Přidat, smazat, popsat poznámkou a seřadit soubory docker-compose v seznamu.">Spravovat</button>
+      <button id="browseComposeButton" title="Vybere soubor docker-compose, přidá ho do seznamu a zvolí ho. Služby se načtou až tlačítkem Načíst služby.">Procházet</button>
       <button id="loadComposeButton" class="primary">Načíst služby</button>
     </section>
 
@@ -112,6 +114,7 @@
   <script src="../common/ui.js"></script>
   <script src="servicePresentation.js"></script>
   <script src="groupEditor.js"></script>
+  <script src="composeListEditor.js"></script>
   <script src="imagePicker.js"></script>
   <script src="main.js"></script>
 </body>

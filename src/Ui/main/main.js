@@ -12,8 +12,10 @@
     stopWslButton: Ui.byId("stopWslButton"),
     refreshStatusButton: Ui.byId("refreshStatusButton"),
     liveListButton: Ui.byId("liveListButton"),
+    projectsButton: Ui.byId("projectsButton"),
     diskButton: Ui.byId("diskButton"),
-    composePathInput: Ui.byId("composePathInput"),
+    composeSelect: Ui.byId("composeSelect"),
+    manageComposeButton: Ui.byId("manageComposeButton"),
     browseComposeButton: Ui.byId("browseComposeButton"),
     loadComposeButton: Ui.byId("loadComposeButton"),
     groupsPanel: Ui.byId("groupsPanel"),
@@ -46,6 +48,7 @@
     settings: null,
     settingsPath: "",
     services: [],
+    loadedComposePath: null,
     runtime: new Map(),
     runtimeKnown: false,
     diskSpace: null,
@@ -73,8 +76,13 @@
     return (runtime?.state ?? "").toLowerCase() === "running";
   }
 
+  function selectedComposePath() {
+    return view.composeSelect.value;
+  }
+
+  // Operace pracují s načteným compose; jiný vybraný v seznamu platí až po Načíst služby.
   function currentComposePath() {
-    return view.composePathInput.value.trim().replace(/^"+|"+$/g, "");
+    return state.loadedComposePath ?? selectedComposePath();
   }
 
   function selectedGroup() {
@@ -112,7 +120,7 @@
   }
 
   async function persist() {
-    state.settings.composePath = currentComposePath();
+    state.settings.composePath = selectedComposePath();
     state.settings.autoRefresh = view.autoRefreshCheckBox.checked;
     state.settings.refreshSeconds = refreshSeconds();
     try {
@@ -214,17 +222,60 @@
 
   // Compose a stav kontejnerů.
 
+  function composeOptionText(file) {
+    return file.note.length > 0 ? `${file.note} — ${file.path}` : file.path;
+  }
+
+  function bindComposeSelect(selectPath) {
+    const files = state.settings.composeFiles;
+    view.composeSelect.replaceChildren(...files.map(file =>
+      Ui.element("option", { value: file.path, text: composeOptionText(file), title: file.path })));
+    const selected = files.find(file => file.path === selectPath) ?? files[0];
+    if (selected)
+      view.composeSelect.value = selected.path;
+    applyComposeSelection();
+  }
+
+  function applyComposeSelection() {
+    const file = state.settings.composeFiles.find(item => item.path === selectedComposePath());
+    view.composeSelect.title = file ? [file.path, file.note].filter(text => text.length > 0).join("\n") : "";
+    const pending = state.loadedComposePath !== selectedComposePath();
+    view.loadComposeButton.classList.toggle("pending", pending);
+    view.loadComposeButton.title = pending
+      ? "Vybraný docker-compose ještě není načtený. Služby v tabulce patří k " + (state.loadedComposePath ?? "žádnému souboru") + "."
+      : "Znovu načte služby z vybraného docker-compose.";
+  }
+
+  async function selectCompose() {
+    applyComposeSelection();
+    await persist();
+  }
+
   async function browseCompose() {
-    const selected = await Ui.invoke("dialog:openCompose", currentComposePath());
-    if (selected) {
-      view.composePathInput.value = selected;
-      await persist();
-    }
+    const selected = await Ui.invoke("dialog:openCompose", selectedComposePath());
+    if (!selected)
+      return;
+    const files = state.settings.composeFiles;
+    const existing = files.find(file => file.path.toLowerCase() === selected.toLowerCase());
+    if (!existing)
+      files.push({ path: selected, note: "" });
+    bindComposeSelect(existing?.path ?? selected);
+    await persist();
+  }
+
+  async function manageCompose() {
+    const files = await ComposeListEditor.open(state.settings.composeFiles, selectedComposePath());
+    if (!files)
+      return;
+    const selected = selectedComposePath();
+    state.settings.composeFiles = files;
+    bindComposeSelect(selected);
+    await persist();
   }
 
   function loadCompose() {
     return runOperation("Načítám služby…", "Služby načteny", async () => {
-      const target = currentComposePath();
+      const target = selectedComposePath();
       if (!await fileExists(target))
         return MISSING_COMPOSE;
 
@@ -236,6 +287,8 @@
       }
 
       state.services = loaded;
+      state.loadedComposePath = target;
+      applyComposeSelection();
       await persist();
       bindGrid();
       return queryRuntime(true);
@@ -325,6 +378,52 @@
     return runOperation("Obnovuji služby…", "Stav obnoven", () => queryRuntime(true));
   }
 
+  async function showProjects() {
+    const target = currentComposePath();
+    await Ui.invoke("window:openProjects", await fileExists(target) ? target : null, state.services);
+  }
+
+  function canceledError() {
+    const error = new Error("Zrušeno");
+    error.canceled = true;
+    return error;
+  }
+
+  // Před spuštěním: porty služeb nesmí na hostu držet jiný compose projekt, jinak start spadne na "port is already allocated".
+  // Když kontrola sama selže, spuštění se neblokuje.
+  async function resolvePortConflicts(composePath, services) {
+    setOperationStatus("Kontroluji porty…");
+    let conflicts;
+    try {
+      conflicts = await Ui.invoke("projects:conflicts", composePath, services);
+    } catch (error) {
+      if (error.canceled)
+        throw error;
+      return null;
+    }
+    if (conflicts.length === 0)
+      return null;
+
+    const lines = conflicts.map(conflict =>
+      `• ${conflict.name || "(bez compose)"}: porty ${conflict.ports.join(", ")}` + (conflict.workingDir ? `\n   ${conflict.workingDir}` : ""));
+    const answer = await Ui.invoke("dialog:message", {
+      type: "warning",
+      title: "Porty drží jiný projekt",
+      message: `Porty potřebné ke spuštění už používají běžící kontejnery z jiného projektu:\n\n${lines.join("\n")}\n\nZastavit tyto projekty (docker compose stop) a pak spustit?`,
+      buttons: ["Zastavit a spustit", "Spustit i tak", "Zobrazit projekty", "Zrušit"]
+    });
+    if (answer === 1)
+      return null;
+    if (answer === 2)
+      showProjects();
+    if (answer !== 0)
+      throw canceledError();
+
+    setOperationStatus("Zastavuji " + conflicts.map(conflict => conflict.name || "(bez compose)").join(", ") + "…");
+    const stopped = await Ui.invoke("projects:stopMany", conflicts.map(conflict => ({ name: conflict.name, containers: conflict.containers })));
+    return stopped.success ? null : stopped.errorText;
+  }
+
   // Akce nad vybranou službou.
 
   async function startSelected() {
@@ -335,6 +434,10 @@
 
     const note = service.replicas === 0 ? " (v compose je vypnutá, spouštím jednu instanci)" : "";
     await runOperation(`Spouštím ${service.name}…${note}`, "Hotovo", async () => {
+      const conflictError = await resolvePortConflicts(target, [service]);
+      if (conflictError)
+        return conflictError;
+      setOperationStatus(`Spouštím ${service.name}…${note}`);
       const result = await Ui.invoke("docker:up", target, [service]);
       return result.success ? queryRuntime() : result.errorText;
     });
@@ -530,6 +633,10 @@
     if (!target)
       return;
     await runOperation(`Spouštím ${target.progressName}…`, successWithMissing(target.missing), async () => {
+      const conflictError = await resolvePortConflicts(target.composePath, target.services);
+      if (conflictError)
+        return conflictError;
+      setOperationStatus(`Spouštím ${target.progressName}…`);
       const result = await Ui.invoke("docker:up", target.composePath, target.services);
       return result.success ? queryRuntime() : result.errorText;
     });
@@ -830,6 +937,7 @@
     view.refreshStatusButton.disabled = busy;
     view.diskButton.disabled = busy;
     view.browseComposeButton.disabled = busy;
+    view.manageComposeButton.disabled = busy;
     view.loadComposeButton.disabled = busy;
     view.refreshServicesButton.disabled = busy || !hasServices;
     view.startServiceButton.disabled = busy || !hasService;
@@ -876,16 +984,12 @@
     view.stopWslButton.addEventListener("click", stopWsl);
     view.refreshStatusButton.addEventListener("click", refreshAll);
     view.liveListButton.addEventListener("click", () => Ui.invoke("window:openLive"));
+    view.projectsButton.addEventListener("click", showProjects);
     view.diskButton.addEventListener("click", showDisk);
     view.browseComposeButton.addEventListener("click", browseCompose);
     view.loadComposeButton.addEventListener("click", loadCompose);
-    view.composePathInput.addEventListener("keydown", event => {
-      if (event.key !== "Enter")
-        return;
-      event.preventDefault();
-      loadCompose();
-    });
-    view.composePathInput.addEventListener("change", persist);
+    view.manageComposeButton.addEventListener("click", manageCompose);
+    view.composeSelect.addEventListener("change", selectCompose);
 
     view.refreshServicesButton.addEventListener("click", refreshServices);
     view.startServiceButton.addEventListener("click", startSelected);
@@ -937,6 +1041,7 @@
       operace: state.currentOperation ?? "(žádná)",
       posledniRadkyOperace: state.recentOperationLines.slice(-10),
       composePath: currentComposePath(),
+      vybranyComposePath: selectedComposePath(),
       skupina: selectedGroup()?.name ?? ALL_SERVICES,
       sluzba: service?.name ?? "(žádná)",
       sluzbaVCompose: service,
@@ -982,7 +1087,7 @@
     state.settingsPath = loaded.settingsPath;
 
     applyPlatformTexts();
-    view.composePathInput.value = state.settings.composePath;
+    bindComposeSelect(state.settings.composePath);
     view.autoRefreshCheckBox.checked = state.settings.autoRefresh;
     view.refreshIntervalInput.value = String(state.settings.refreshSeconds);
     wireEvents();
@@ -991,7 +1096,7 @@
 
     bindGroups();
     await refreshEnvironment(false);
-    if (await fileExists(currentComposePath()))
+    if (await fileExists(selectedComposePath()))
       await loadCompose();
   }
 

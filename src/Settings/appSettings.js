@@ -23,6 +23,7 @@ function createExampleMapping() {
 function createDefault() {
   return {
     composePath: DEFAULT_COMPOSE_PATH,
+    composeFiles: [{ path: DEFAULT_COMPOSE_PATH, note: "" }],
     autoRefresh: false,
     refreshSeconds: 10,
     groups: [],
@@ -86,6 +87,23 @@ function normalizeMapping(mapping) {
   };
 }
 
+// Seznam compose souborů pro rozbalovací seznam; aktuální cesta v něm nesmí chybět.
+function normalizeComposeFiles(files, composePath) {
+  const seen = new Set();
+  const result = [];
+  for (const file of Array.isArray(files) ? files : []) {
+    const filePath = trimText(file?.path);
+    const key = filePath.toLowerCase();
+    if (filePath.length === 0 || seen.has(key))
+      continue;
+    seen.add(key);
+    result.push({ path: filePath, note: trimText(file?.note) });
+  }
+  if (!seen.has(composePath.trim().toLowerCase()))
+    result.unshift({ path: composePath.trim(), note: "" });
+  return result;
+}
+
 function clampRefresh(value) {
   const seconds = Number.isFinite(value) ? Math.trunc(value) : 10;
   return Math.min(300, Math.max(5, seconds));
@@ -105,6 +123,7 @@ function normalize(settings) {
 
   return {
     composePath,
+    composeFiles: normalizeComposeFiles(source.composeFiles, composePath),
     autoRefresh: source.autoRefresh === true,
     refreshSeconds: clampRefresh(source.refreshSeconds ?? 10),
     groups,
