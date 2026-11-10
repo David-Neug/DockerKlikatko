@@ -5,10 +5,6 @@ Desktopová aplikace (Electron) pro klikací správu služeb z jednoho souboru `
 ## Co umí
 
 - **Stav prostředí** – na Windows ukazuje stav WSL a umí ho spustit (`wsl -d <výchozí distribuce> -e true`) nebo zastavit (`wsl --shutdown`). Na Linuxu jsou tlačítka WSL skrytá a místo nich je vidět, jestli odpovídá Docker daemon.
-- **Seznam compose souborů** – pole „Soubor docker-compose“ je rozbalovací seznam, mezi uloženými soubory jde přepínat. Položka se ukazuje jako `poznámka — cesta` (bez poznámky jen cesta).
-  - **Procházet** vybraný soubor přidá do seznamu (když v něm ještě není) a zvolí ho.
-  - **Spravovat** otevře dialog se seznamem: cestu i poznámku jde přepsat přímo v řádku, **Přidat…** vybere další soubor, **Smazat** odebere vybraný, **Nahoru** / **Dolů** mění pořadí. Neexistující soubor má cestu červeně. Uložit nejde prázdný seznam ani stejný soubor dvakrát.
-  - Změna výběru služby **nenačte**. Dokud se nestiskne **Načíst služby**, tlačítko svítí oranžově a všechny akce (spuštění, zastavení, obnova, místo na disku, běžící projekty) pracují dál s dříve načteným compose, ke kterému patří služby v tabulce.
 - **Načtení compose** – zobrazí všechny služby v tabulce. Služby můžou být přímo v `services` nebo v souborech z `include:` (i vnořených). Relativní cesty v includovaném souboru platí vůči jeho složce a proměnné `${...}` se dosadí z `.env` vedle hlavního compose:
 
   | Sloupec | Obsah |
@@ -26,11 +22,28 @@ Desktopová aplikace (Electron) pro klikací správu služeb z jednoho souboru `
   Barva řádku: zelená = běží, oranžová = padá, šedá = zastaveno, bílá = kontejner není vytvořen.
 - **Akce nad službou** – Spustit (i služby s `replicas: 0`, spustí jednu instanci), Zastavit, Odstranit kontejner (volumes a data zůstanou), Zobrazit logy (posledních 300 řádků, volitelně živé sledování).
 - **Stáhnout image** – u služby s `image` nabídne tagy z registru (Docker Hub nebo privátní registr, přihlašovací údaje bere z `~/.docker/config.json` a credential helperu). Vybraný tag stáhne a **přepíše řádek `image:` v compose** (u služby z `include:` v souboru, kde je definovaná) (zachová uvozovky, komentáře, BOM i konce řádků). Služba s `build` se sestaví.
+- **Auto obnova** – stav služeb se obnovuje každých 5–300 s.
 - **Skupiny** – pojmenované sady služeb (Přidat / Upravit / Smazat). Skupinu jde najednou spustit, zastavit nebo pro ni stáhnout image. „Všechny služby“ pracuje s celým compose.
 - **Živý seznam** – samostatné okno, které každou sekundu vypisuje běžící kontejnery (image, verze, stav, čas startu).
-- **Auto obnova** – stav služeb se obnovuje každých 5–300 s.
-- **Místo na disku** – okno s přehledem, kolik místa zabírají image, kontejnery, volumy a build cache, co z toho jde smazat a kde data Dockeru leží. Vybrané položky smaže bez vlivu na běžící kontejnery. Podrobnosti viz [Místo na disku](#místo-na-disku).
 - **Nahrát lokální binárky** – u DTF služby s mapováním v nastavení sestaví zdrojový projekt (MSBuild Rebuild) a nahraje výstup do složky `Bin` běžícího kontejneru. Podrobnosti viz [Lokální binárky](#lokální-binárky).
+- **Místo na disku** – okno s přehledem, kolik místa zabírají image, kontejnery, volumy a build cache, co z toho jde smazat a kde data Dockeru leží. Vybrané položky smaže bez vlivu na běžící kontejnery. Podrobnosti viz [Místo na disku](#místo-na-disku).
+- **Seznam compose souborů** – pole „Soubor docker-compose“ je rozbalovací seznam, mezi uloženými soubory jde přepínat. Položka se ukazuje jako `poznámka — cesta` (bez poznámky jen cesta).
+  - **Procházet** vybraný soubor přidá do seznamu (když v něm ještě není) a zvolí ho.
+  - **Spravovat** otevře dialog se seznamem: cestu i poznámku jde přepsat přímo v řádku, **Přidat…** vybere další soubor, **Smazat** odebere vybraný, **Nahoru** / **Dolů** mění pořadí. Neexistující soubor má cestu červeně. Uložit nejde prázdný seznam ani stejný soubor dvakrát.
+  - Při změně výběru se služby **nenačtou**. Dokud se nestiskne **Načíst služby**, tlačítko svítí oranžově a všechny akce (spuštění, zastavení, obnova, místo na disku, běžící projekty) pracují dál s dříve načteným compose, ke kterému patří služby v tabulce.
+- **Běžící projekty** – samostatné okno s běžícími kontejnery ze všech compose projektů (i z jiných složek), seskupenými podle projektu (label `com.docker.compose.project`). U projektu ukazuje složku, počet kontejnerů a porty na hostu, pod ním jednotlivé kontejnery s image, stavem a health. Kontejnery spuštěné mimo compose jsou pod „(bez compose)“. Obnovuje se každé 3 s.
+  - Zeleně je projekt načtený v hlavním okně, červeně projekty, které drží jeho porty, i s konkrétními porty.
+  - **Zastavit projekt** po potvrzení spustí `docker compose -p <projekt> stop`. Kontejnery se zastaví, ale nesmažou, a uvolní porty. Compose soubor projektu není potřeba. Načtený projekt se tu zastavit nedá, na to slouží hlavní okno.
+- **Kontrola portů před spuštěním** – při **Spustit** a **Spustit skupinu** se nejdřív ověří, jestli porty spouštěných služeb (`ports` z compose) nedrží jiný běžící projekt. Jinak by start spadl na `port is already allocated`. Když porty někdo drží, aplikace vypíše projekty a porty a nabídne:
+
+  | Volba | Co udělá |
+  |---|---|
+  | Zastavit a spustit | zastaví kolidující projekty (`docker compose -p <projekt> stop`, u kontejnerů mimo compose jen ty, které porty drží) a pak spustí služby |
+  | Spustit i tak | spustí bez zastavení |
+  | Zobrazit projekty | otevře okno Běžící projekty a spuštění zruší |
+  | Zrušit | nic nespustí |
+
+  Když kontrola sama selže (třeba nejde zjistit název projektu), spuštění neblokuje.
 
 ## Požadavky
 
@@ -273,10 +286,10 @@ src/
   App/                 hlavní proces Electronu: okna, IPC, preload
   Process/             spouštění externích programů (výstup po řádcích, timeouty, ukončení stromu procesů)
   Wsl/                 stav, spuštění a zastavení WSL
-  Docker/              docker / docker compose, živý seznam kontejnerů, místo na disku
+  Docker/              docker / docker compose, živý seznam kontejnerů, běžící projekty a konflikty portů, místo na disku
   Compose/             čtení docker-compose a přepis řádku image
   Images/              rozbor názvu image, tagy z registrů, přihlašovací údaje Dockeru
   LocalBinaries/       git, MSBuild, kopírování do Bin a značka nasazení
   Settings/            výchozí settings.json, načítání a ukládání nastavení
-  Ui/                  okna aplikace (hlavní okno, logy, živý seznam, místo na disku, lokální binárky)
+  Ui/                  okna aplikace (hlavní okno, logy, živý seznam, běžící projekty, místo na disku, lokální binárky)
 ```
